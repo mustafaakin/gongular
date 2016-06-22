@@ -32,18 +32,18 @@ Route handler functions are flexible. They can have various parameters or output
 
 Allowed **input types**:
 
-* *http.Request, original http request object
-* http.ResponseWriter, you can manually use the response writer if you wish but should not be needed in most cases
-* SomethingBody,  if given struct's name ends with body, it binds HTTP request body, treating it as a JSON
-* SomethingQuery, if given struct's name ends with query, it bind the query params 
-* SomethingParam, if given struct's name ends with param, it binds the URL params
+* `*http.Request`       : original http request object
+* `http.ResponseWriter` : you can manually use the response writer if you wish but should not be needed in most cases
+* `SomethingBody`       :  if given struct's name ends with body, it binds HTTP request body, treating it as a JSON
+* `SomethingQuery`      : if given struct's name ends with query, it bind the query params 
+* `SomethingParam`      : if given struct's name ends with param, it binds the URL params
 
 Allowed **output types**:
 
-* int : Indicates a HTTP status code, if -1, ignored
-* boolean: Stops request handler chain, useful in grouping routes
-* error: An internal error that displays an error message to request and logs details in console
-* struct or string: Renders the given struct/string as JSON to user
+* `int`              : Indicates a HTTP status code, if -1, ignored
+* `boolean`          : Stops request handler chain, useful in grouping routes
+* `error`            : An internal error that displays an error message to request and logs details in console
+* `struct or string` : Renders the given struct/string as JSON to user
 
 ## Routes, Middlewares and Grouping
 
