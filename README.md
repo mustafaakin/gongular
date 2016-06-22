@@ -45,6 +45,14 @@ Allowed **output types**:
 * `error`            : An internal error that displays an error message to request and logs details in console
 * `struct or string` : Renders the given struct/string as JSON to user
 
+So, the following is completly valid, you can use any number of inputs or outputs. 
+
+```go
+func (w http.ResponseWriter, r *http.Request, body SomethingBody, query SomethingQuery, param SomethingParam) (int, boolean, error, SomethingOutput){
+    
+}
+```
+
 ## Routes, Middlewares and Grouping
 
 Routes can have multiple handlers, called middlewares, which might be useful in grouping the requests and doing preliminary work before some routes. For example, the following grouping and routing is valid:
