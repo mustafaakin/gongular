@@ -1,4 +1,4 @@
-![gongular](https://raw.githubusercontent.com/godum/gongular/master/logo.png)
+![gongular](https://raw.githubusercontent.com/mustafaakin/gongular/master/logo.png)
 
 gongular is an HTTP Server Framework for developing API. It is like Gin Gonic, but it features Angular-like (or Spring like) dependency injection and better input handling. Simple usage is as follows
 
