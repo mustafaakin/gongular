@@ -180,8 +180,14 @@ r.ProvideCustom(UserSession{}, func(w http.ResponseWriter, r *http.Request) (err
 
 ## TODO
 
+* Code refactoring for better readability & testability
+* Actual tests
 * Static file serving
 * Configurable logging
 * Better validation
 * Better info about routes
 * Stats about route performance (not really needed)
+
+## Contribute
+
+You are welcome to contribute in anyway possible. However, I would appreciate a discussion before just sending PRs to agree on something.

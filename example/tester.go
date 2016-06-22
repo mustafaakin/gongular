@@ -1,12 +1,21 @@
 package main
 
 import (
+	"errors"
 	"github.com/Sirupsen/logrus"
 	"github.com/mustafaakin/gongular"
 	"log"
 	"net/http"
 	"os"
 )
+
+type UserSession struct {
+	Username string
+}
+
+type UserSession2 struct {
+	Username string
+}
 
 func main() {
 	// Not very important, just to see proper colored log output in Intellij IDEA
@@ -16,8 +25,25 @@ func main() {
 
 	// Create a new Router, currently no options required
 	r := gongular.NewRouter()
-	r.GET("/", func(r *http.Request) string{
+	r.GET("/", func(r *http.Request) string {
 		return "Hello: " + r.RemoteAddr
+	})
+
+	r.ProvideCustom(UserSession{}, func(w http.ResponseWriter, r *http.Request) (error, error, interface{}) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return nil, errors.New("Could not provide sorry"), nil
+	})
+
+	r.ProvideCustom(UserSession2{}, func(w http.ResponseWriter, r *http.Request) (error, error, interface{}) {
+		return errors.New("Internal error ups"), nil, nil
+	})
+
+	r.GET("/provideFail", func(u UserSession) string {
+		return "Username: " + u.Username
+	})
+
+	r.GET("/provideFail2", func(u UserSession2) string {
+		return "Username: " + u.Username
 	})
 
 	// Default listen and serve
