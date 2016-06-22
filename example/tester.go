@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"fmt"
 )
 
 type UserSession struct {
@@ -29,13 +30,14 @@ func main() {
 		return "Hello: " + r.RemoteAddr
 	})
 
-	r.ProvideCustom(UserSession{}, func(w http.ResponseWriter, r *http.Request) (error, error, interface{}) {
+	r.ProvideCustom(UserSession{}, func(w http.ResponseWriter, r *http.Request) (error, interface{}) {
 		w.WriteHeader(http.StatusUnauthorized)
-		return nil, errors.New("Could not provide sorry"), nil
+		fmt.Fprintf(w, "Sorry but you are unauthorized")
+		return nil, nil
 	})
 
-	r.ProvideCustom(UserSession2{}, func(w http.ResponseWriter, r *http.Request) (error, error, interface{}) {
-		return errors.New("Internal error ups"), nil, nil
+	r.ProvideCustom(UserSession2{}, func(w http.ResponseWriter, r *http.Request) (error, interface{}) {
+		return errors.New("could not connect to db"), nil
 	})
 
 	r.GET("/provideFail", func(u UserSession) string {

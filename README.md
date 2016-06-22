@@ -169,10 +169,12 @@ r.ProvideCustom(UserSession{}, func(w http.ResponseWriter, r *http.Request) (err
         w.WriteHeader(http.StatusUnauthorized)
         w.Header().Set("Content-Type", "application/json")
         fmt.Fprintf(w, "You are unauthorized!!!")
-        return gongular.ProvideError("User not authorized"), nil
+        return nil, nil
     }
 })
 ```
+
+Note that, errors are used for indicating internal errors. If you supply a value to error, the gongular router will write 500 as a status. If you want to indicate that you could not supply a value, you have to proivde nil as second output.
 
 ## Logging
 

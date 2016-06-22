@@ -281,13 +281,12 @@ func (hc *handlerContext) execute(injector *Injector, w http.ResponseWriter, r *
 	for _, arg := range hc.customArgs {
 		// Check if it exists on execution-injectable values then
 		if fn, ok := injector.customProviders[arg.obj]; ok {
-			err_internal, err_provide, out := fn(w, r)
+			err_internal, out := fn(w, r)
 			if err_internal != nil {
 				log.WithField("type", arg.obj).WithError(err_internal).Error("Could not provide custom value due to an internal error")
 				return http.StatusInternalServerError, true, "An internal error has occured", nil
-			} else if err_provide != nil {
-				log.WithField("type", arg.obj).WithError(err_provide).Info("Could not provide custom value, due to logic")
-				return -1, true, err_provide.Error(), nil
+			} else if out == nil {
+				return -1, true, "", nil
 			} else {
 				ins[arg.idx] = reflect.ValueOf(out)
 			}
@@ -409,10 +408,4 @@ func wrapHandlers(injector *Injector, path string, fns ...interface{}) http.Hand
 		}).Info("HTTP Request Handled")
 	}
 	return fn
-}
-
-type CustomProvideError error
-
-func ProvideError(message string) CustomProvideError {
-	return errors.New(message).(CustomProvideError)
 }
