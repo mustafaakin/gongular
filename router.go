@@ -29,6 +29,10 @@ func NewRouter() *Router {
 	return r
 }
 
+func(r *Router) GetMuxer() *mux.Router {
+	return r.muxer
+}
+
 func (r *Router) GetHandler() (http.Handler){
 	return r.muxer
 }
