@@ -48,6 +48,8 @@ func main() {
 		return "Username: " + u.Username
 	})
 
+	r.Static("example/static")
+
 	// Default listen and serve
 	err := r.ListenAndServe(":8000")
 	if err != nil {

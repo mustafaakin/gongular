@@ -94,9 +94,9 @@ func (r *Router) ProvideCustom(value interface{}, fn CustomProvideFunction) {
 	r.injector.ProvideCustom(value, fn)
 }
 
-func (r *Router) Static(base, path string){
-	assets := http.StripPrefix("/", http.FileServer(http.Dir("assets/")))
-	http.Handle("/", assets)
+// Static serves static files from a given base, without any prefix
+func (r *Router) Static(base string){
+	r.muxer.PathPrefix("/").Handler(http.FileServer(http.Dir(base)))
 }
 
 
