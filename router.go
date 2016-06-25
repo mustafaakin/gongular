@@ -4,10 +4,17 @@ import (
 	"net/http"
 	"path"
 	"reflect"
+	"os"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
 )
+
+// SetLogrys, temprorary fix for logging since logrus id vendor'ed we cannot change it in our app
+func SetLogrus(){
+	log.SetFormatter(&log.TextFormatter{ForceColors: true})
+	log.SetOutput(os.Stdout)
+}
 
 // Router holds information about overall router and inner objects such as
 // prefix and additional handlers
