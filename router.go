@@ -2,16 +2,16 @@ package gongular
 
 import (
 	"net/http"
+	"os"
 	"path"
 	"reflect"
-	"os"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/gorilla/mux"
+	"github.com/julienschmidt/httprouter"
 )
 
 // SetLogrys, temprorary fix for logging since logrus id vendor'ed we cannot change it in our app
-func SetLogrus(){
+func SetLogrus() {
 	log.SetFormatter(&log.TextFormatter{ForceColors: true})
 	log.SetOutput(os.Stdout)
 }
@@ -19,7 +19,7 @@ func SetLogrus(){
 // Router holds information about overall router and inner objects such as
 // prefix and additional handlers
 type Router struct {
-	muxer    *mux.Router
+	router   *httprouter.Router
 	injector *Injector
 	prefix   string
 	handlers []interface{}
@@ -28,7 +28,7 @@ type Router struct {
 // NewRouter initiates a router object with default params
 func NewRouter() *Router {
 	r := &Router{
-		muxer:    mux.NewRouter(),
+		router:   httprouter.New(),
 		injector: NewInjector(),
 		prefix:   "",
 		handlers: make([]interface{}, 0),
@@ -36,18 +36,18 @@ func NewRouter() *Router {
 	return r
 }
 
-func(r *Router) GetMuxer() *mux.Router {
-	return r.muxer
+func (r *Router) GetMuxer() *httprouter.Router {
+	return r.router
 }
 
-func (r *Router) GetHandler() (http.Handler){
-	return r.muxer
+func (r *Router) GetHandler() http.Handler {
+	return r.router
 }
 
 // ListenAndServe starts a web server at given addr
-func (r *Router) ListenAndServe(addr string) (error) {
+func (r *Router) ListenAndServe(addr string) error {
 	log.WithField("address", addr).Info("Listening on HTTP")
-	return http.ListenAndServe(addr, r.muxer)
+	return http.ListenAndServe(addr, r.router)
 }
 
 // subpath initiates a new route with path and handlers, useful for grouping
@@ -64,21 +64,25 @@ func (r *Router) subpath(_path string, handlers []interface{}) (string, []interf
 func (r *Router) GET(_path string, handlers ...interface{}) {
 	resultingPath, combinedHandlers := r.subpath(_path, handlers)
 
-	r.muxer.HandleFunc(resultingPath, wrapHandlers(r.injector, resultingPath, combinedHandlers...)).Methods("GET")
+	fn := wrapHandlers(r.injector, resultingPath, combinedHandlers...)
+	r.router.GET(resultingPath, fn)
 	printBindingMessage(resultingPath, "GET", combinedHandlers...)
 }
 
 // POST registers given set of handlers to a POST request at path
-func (r *Router) POST(path string, handlers ...interface{}) {
-	r.muxer.HandleFunc(path, wrapHandlers(r.injector, path, handlers...)).Methods("POST")
-	printBindingMessage(path, "POST", handlers...)
+func (r *Router) POST(_path string, handlers ...interface{}) {
+	resultingPath, combinedHandlers := r.subpath(_path, handlers)
+
+	fn := wrapHandlers(r.injector, resultingPath, combinedHandlers...)
+	r.router.GET(resultingPath, fn)
+	printBindingMessage(resultingPath, "POST", handlers...)
 }
 
 // Group groups a given path with additional interfaces. It is useful to avoid
 // repetitions while defining many paths
 func (r *Router) Group(_path string, handlers ...interface{}) *Router {
 	newRouter := &Router{
-		muxer:    r.muxer,
+		router:   r.router,
 		injector: r.injector,
 		prefix:   path.Join(r.prefix, _path),
 	}
@@ -106,10 +110,12 @@ func (r *Router) ProvideCustom(value interface{}, fn CustomProvideFunction) {
 }
 
 // Static serves static files from a given base, without any prefix
-func (r *Router) Static(base string){
-	r.muxer.PathPrefix("/").Handler(http.FileServer(http.Dir(base)))
+func (r *Router) Static(base string) {
+	//	r.muxer.PathPrefix("/").Handler(http.FileServer(http.Dir(base)))
+	//	router.ServeFiles("/src/*filepath", http.Dir(base))
+	//	r.router.S
+	// TODO: change function sig
 }
-
 
 // Prints the binding message for a route
 func printBindingMessage(path, method string, handlers ...interface{}) {

@@ -14,6 +14,7 @@ import (
 	"github.com/asaskevich/govalidator"
 	"github.com/gorilla/mux"
 	"github.com/satori/go.uuid"
+	"github.com/julienschmidt/httprouter"
 )
 
 // funcArg remembers the type of the function argument and its index
@@ -306,6 +307,8 @@ nofail:
 	resCode := -1
 	var stopChain bool
 	var response interface{}
+
+	// TODO: Wrong logic here fix, why else if? we set them no matter what
 	if hc.outErr != nil {
 		out := outs[hc.outErr.idx]
 		if !out.IsNil() {
@@ -327,18 +330,18 @@ nofail:
 	return resCode, stopChain, response, err
 }
 
-func wrapHandlers(injector *Injector, path string, fns ...interface{}) http.HandlerFunc {
+func wrapHandlers(injector *Injector, path string, fns ...interface{}) httprouter.Handle {
 	// Determine parameter types
 	hcs := make([]*handlerContext, len(fns))
-
 	for idx, fn := range fns {
 		hcs[idx] = convertHandler(injector, fn)
 	}
 
-	fn := func(w http.ResponseWriter, r *http.Request) {
+	fn := func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		startTime := time.Now()
 		reqIdentificationNo := uuid.NewV4()
 
+		// TODO: Eliminate this with using custom error handler of httprouter
 		var err2 error
 		defer func() {
 			r := recover()
@@ -372,9 +375,9 @@ func wrapHandlers(injector *Injector, path string, fns ...interface{}) http.Hand
 			}
 
 			if hc.outResponse != nil {
-				w.Header().Set("Content-Type", "application/json")
+				// If empty, don't return anything
 				if res != nil {
-					// If empty, don't return anything
+					w.Header().Set("Content-Type", "application/json")
 					json.NewEncoder(w).Encode(res)
 				}
 			}
@@ -385,6 +388,7 @@ func wrapHandlers(injector *Injector, path string, fns ...interface{}) http.Hand
 				break
 			}
 
+			// TODO: Eliminate logrus 
 			log.WithFields(log.Fields{
 				"matchedPath": path,
 				"path":        r.URL.Path,
