@@ -7,13 +7,11 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"time"
 
 	"errors"
-	log "github.com/Sirupsen/logrus"
 	"github.com/asaskevich/govalidator"
-	"github.com/satori/go.uuid"
 	"github.com/julienschmidt/httprouter"
+	"log"
 )
 
 var ErrNoJsonBody = errors.New("No JSON body is suppiled")
@@ -160,7 +158,6 @@ func (hc *handlerContext) parseParams(ps httprouter.Params) (*reflect.Value, err
 	for i := 0; i < fields; i++ {
 		field := hc.param.obj.Field(i)
 		content := ps.ByName(field.Name)
-		fmt.Println("aq:" + content)
 		if content == "" {
 			validationError := fmt.Sprintf("param ", field.Name, " does not exist")
 			return nil, errors.New(validationError)
@@ -261,7 +258,7 @@ func (hc *handlerContext) parseQuery(r *http.Request) (*reflect.Value, error){
 
 // execute responds to an http request by using writer and request
 // returns all the possible values
-func (hc *handlerContext) execute(injector *Injector, w http.ResponseWriter, r *http.Request, ps httprouter.Params) (int, bool, interface{}, error) {
+func (hc *handlerContext) execute(injector *Injector, w http.ResponseWriter, r *http.Request, ps httprouter.Params, logger *log.Logger) (int, bool, interface{}, error) {
 	// Prepare inputs to be supplied to hc.fn function
 	ins := make([]reflect.Value, hc.numIn)
 
@@ -324,7 +321,7 @@ func (hc *handlerContext) execute(injector *Injector, w http.ResponseWriter, r *
 		if fn, ok := injector.customProviders[arg.obj]; ok {
 			err_internal, out := fn(w, r)
 			if err_internal != nil {
-				log.WithField("type", arg.obj).WithError(err_internal).Error("Could not provide custom value due to an internal error")
+				logger.Printf("Could not provide custom value '%s' to do an error: '%s'\n", arg.obj, err_internal)
 				return http.StatusInternalServerError, true, "An internal error has occured", nil
 			} else if out == nil {
 				return -1, true, "", nil
@@ -376,88 +373,4 @@ nofail:
 
 	// what to do with them is responsibility of the other functions
 	return resCode, stopChain, response, err
-}
-
-func wrapHandlers(injector *Injector, path string, fns ...interface{}) httprouter.Handle {
-	// Determine parameter types
-	hcs := make([]*handlerContext, len(fns))
-	for idx, fn := range fns {
-		hcs[idx] = convertHandler(injector, fn)
-	}
-
-	fn := func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-		startTime := time.Now()
-		reqIdentificationNo := uuid.NewV4()
-
-		// TODO: Eliminate this with using custom error handler of httprouter
-		var err2 error
-		defer func() {
-			r := recover()
-			if r != nil {
-				switch t := r.(type) {
-				case string:
-					err2 = errors.New(t)
-				case error:
-					err2 = t
-				default:
-					err2 = errors.New("Unknown error")
-				}
-				log.WithError(err2).WithField("uuid", reqIdentificationNo).Error("An error occcured while serving request")
-				http.Error(w, "An internal error has occured.", http.StatusInternalServerError)
-			}
-		}()
-
-		for idx, hc := range hcs {
-			handlerStartTime := time.Now()
-			status, stopChain, res, err := hc.execute(injector, w, r, ps)
-
-			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Header().Set("Content-Type", "application/json")
-				break
-			}
-
-			// Status is default -1
-			if hc.outCode != nil || status >= 100 {
-				w.WriteHeader(status)
-			}
-
-			if hc.outResponse != nil {
-				// If empty, don't return anything
-				if res != nil {
-					w.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(w).Encode(res)
-				}
-			}
-
-			// We stop chain if it is required, after setting status and output
-			if hc.outStopChain != nil && stopChain == true {
-				// Stopping the chain of execution
-				break
-			}
-
-			// TODO: Eliminate logrus
-			log.WithFields(log.Fields{
-				"matchedPath": path,
-				"path":        r.URL.Path,
-				"name":        hc.fn.String(),
-				"funcId":      hc.fn,
-				"idx":         idx,
-				"err":         err,
-				"status":      status,
-				"stopChain":   stopChain,
-				"res":         res,
-				"elapsed":     time.Since(handlerStartTime),
-				"uuid":        reqIdentificationNo,
-			}).Info("HTTP Handler")
-		}
-
-		log.WithFields(log.Fields{
-			"elapsed":    time.Since(startTime),
-			"path":       r.URL.Path,
-			"matcedPath": path,
-			"uuid":       reqIdentificationNo,
-		}).Info("HTTP Request Handled")
-	}
-	return fn
 }

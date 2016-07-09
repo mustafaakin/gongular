@@ -3,8 +3,6 @@ package gongular
 import (
 	"net/http"
 	"reflect"
-
-	"github.com/Sirupsen/logrus"
 )
 
 // Injector remembers the provided values so that you can inject whenever
@@ -29,7 +27,6 @@ func (inj *Injector) Provide(value interface{}) {
 	}
 	name := reflect.TypeOf(value)
 	inj.values[name] = value
-	logrus.WithField("name", name).Info("Dependency registered as is")
 }
 
 // ProvideCustom gets the type information from value, however calls CustomProvideFunction
@@ -40,7 +37,6 @@ func (inj *Injector) ProvideCustom(value interface{}, fn CustomProvideFunction) 
 	}
 	name := reflect.TypeOf(value)
 	inj.customProviders[name] = fn
-	logrus.WithField("name", name).Info("Custom dependency registered")
 }
 
 // CustomProvideFunction is called whenever a value is needed to be provided

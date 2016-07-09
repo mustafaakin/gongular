@@ -30,6 +30,7 @@ func main() {
 
 	// Create a new Router, currently no options required
 	r := gongular.NewRouter()
+	r.DisableDebug()
 	r.GET("/", func(r *http.Request) string {
 		return "Hello: " + r.RemoteAddr
 	})
@@ -56,11 +57,11 @@ func main() {
 		return "Username: " + u.Username
 	})
 
-	r.Static("example/static")
+	r.Static("/assets", "example/static")
 
 	// Default listen and serve
 	err := r.ListenAndServe(":8000")
 	if err != nil {
-		logrus.Fatal(err)
+		log.Fatal(err)
 	}
 }
