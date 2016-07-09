@@ -10,12 +10,6 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
-// SetLogrys, temprorary fix for logging since logrus id vendor'ed we cannot change it in our app
-func SetLogrus() {
-	log.SetFormatter(&log.TextFormatter{ForceColors: true})
-	log.SetOutput(os.Stdout)
-}
-
 // Router holds information about overall router and inner objects such as
 // prefix and additional handlers
 type Router struct {

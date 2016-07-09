@@ -12,10 +12,12 @@ import (
 	"errors"
 	log "github.com/Sirupsen/logrus"
 	"github.com/asaskevich/govalidator"
-	"github.com/gorilla/mux"
 	"github.com/satori/go.uuid"
 	"github.com/julienschmidt/httprouter"
 )
+
+var ErrNoJsonBody = errors.New("No JSON body is suppiled")
+var ErrNotValidJsonBody = errors.New("Submitted request body is not JSON")
 
 // funcArg remembers the type of the function argument and its index
 type funcArg struct {
@@ -152,9 +154,114 @@ func convertHandler(ij *Injector, fn interface{}) *handlerContext {
 	return hc
 }
 
+func (hc *handlerContext) parseParams(ps httprouter.Params) (*reflect.Value, error) {
+	v := reflect.New(hc.param.obj).Elem()
+	fields := hc.param.obj.NumField()
+	for i := 0; i < fields; i++ {
+		field := hc.param.obj.Field(i)
+		content := ps.ByName(field.Name)
+		fmt.Println("aq:" + content)
+		if content == "" {
+			validationError := fmt.Sprintf("param ", field.Name, " does not exist")
+			return nil, errors.New(validationError)
+		} else {
+			field2 := v.FieldByName(field.Name)
+			kind := field2.Kind()
+			if kind == reflect.Int {
+				i, err := strconv.ParseInt(content, 10, 64)
+				if err != nil {
+					validationError := fmt.Sprintf("Expected integer for param field %s, but found '%s' instead", field.Name, content)
+					return nil, errors.New(validationError)
+				}
+				field2.SetInt(i)
+			} else if kind == reflect.String {
+				field2.SetString(content)
+			} else {
+				validationError := fmt.Sprintf("Unknown type for param field:" + content)
+				return nil, errors.New(validationError)
+			}
+		}
+	}
+
+	isValid, err := govalidator.ValidateStruct(v.Interface())
+	if !isValid {
+		validationError := fmt.Sprintf("Params are not valid: %s", err.Error())
+		return nil, errors.New(validationError)
+	}
+
+	return &v, nil
+}
+
+func (hc *handlerContext) parseBody(r *http.Request) (*reflect.Value, error) {
+	// Check if body exists so we try to parse it
+	if r.Body == nil {
+		return nil, ErrNoJsonBody
+	}
+
+	// Construct given object
+	v := reflect.New(hc.body.obj)
+
+	// Try to parse it to our interface
+	err := json.NewDecoder(r.Body).Decode(v.Interface())
+	if err != nil {
+		return nil, ErrNotValidJsonBody
+	}
+
+	// When parsing done, validate it
+	isValid, err := govalidator.ValidateStruct(v.Interface())
+	if !isValid {
+		validationError := fmt.Sprintf("Submitted body is not valid: %s", err.Error())
+		return nil, errors.New(validationError)
+	}
+
+	// Return the final element
+	elem := v.Elem()
+	return &elem, nil
+}
+
+func (hc *handlerContext) parseQuery(r *http.Request) (*reflect.Value, error){
+	v := reflect.New(hc.query.obj).Elem()
+	fields := hc.query.obj.NumField()
+
+	for i := 0; i < fields; i++ {
+		field := hc.query.obj.Field(i)
+		content := r.URL.Query().Get(field.Name)
+		if content == "" {
+			validationError := fmt.Sprintf("Required query parameter not found: %s", field.Name)
+			return nil, errors.New(validationError)
+		} else {
+			// TODO: Convert it to appropriate type later
+			field2 := v.FieldByName(field.Name)
+			kind := field2.Kind()
+
+			if kind == reflect.Int {
+				i, err := strconv.ParseInt(content, 10, 64)
+				if err != nil {
+					validationError := fmt.Sprintf("Expected integer for field %s, but found '%s' instead", err.Error(), content)
+					return nil, errors.New(validationError)
+				}
+				field2.SetInt(i)
+			} else if kind == reflect.String {
+				field2.SetString(content)
+			} else {
+				validationError := fmt.Sprintf("Unknown type for field: %s", content)
+				return nil, errors.New(validationError)
+			}
+		}
+	}
+
+	isValid, err := govalidator.ValidateStruct(v.Interface())
+	if !isValid {
+		validationError := fmt.Sprintf("Query parameter is not valid: %s", err.Error())
+		return nil, errors.New(validationError)
+	}
+
+	return &v, nil
+}
+
 // execute responds to an http request by using writer and request
 // returns all the possible values
-func (hc *handlerContext) execute(injector *Injector, w http.ResponseWriter, r *http.Request) (int, bool, interface{}, error) {
+func (hc *handlerContext) execute(injector *Injector, w http.ResponseWriter, r *http.Request, ps httprouter.Params) (int, bool, interface{}, error) {
 	// Prepare inputs to be supplied to hc.fn function
 	ins := make([]reflect.Value, hc.numIn)
 
@@ -170,101 +277,34 @@ func (hc *handlerContext) execute(injector *Injector, w http.ResponseWriter, r *
 		ins[hc.req.idx] = reflect.ValueOf(r)
 	}
 
-	// Try to fill path params such as /user/{UserId}
+	// Try to fill path params such as /user/:UserId
 	if hc.param != nil {
-		vars := mux.Vars(r)
-		v := reflect.New(hc.param.obj).Elem()
-		fields := hc.param.obj.NumField()
-		for i := 0; i < fields; i++ {
-			field := hc.param.obj.Field(i)
-			content, ok := vars[field.Name]
-			if !ok {
-				validationError = fmt.Sprintf("param ", field.Name, " does not exist")
-				goto fail
-			} else {
-				field2 := v.FieldByName(field.Name)
-				kind := field2.Kind()
-				if kind == reflect.Int {
-					i, err := strconv.ParseInt(content, 10, 64)
-					if err != nil {
-						validationError = fmt.Sprintf("Expected integer for param field %s, but found '%s' instead", field.Name, content)
-						goto fail
-					}
-					field2.SetInt(i)
-				} else if kind == reflect.String {
-					field2.SetString(content)
-				} else {
-					validationError = fmt.Sprintf("Unknown type for param field:" + content)
-					goto fail
-				}
-			}
-		}
-		isValid, err := govalidator.ValidateStruct(v.Interface())
-		if !isValid {
-			validationError = fmt.Sprintf("Params are not valid: %s", err.Error())
+		v, err := hc.parseParams(ps)
+		if err == nil {
+			ins[hc.param.idx] = *v
+		} else {
 			goto fail
 		}
-		ins[hc.param.idx] = v
 	}
 
 	// Try to parse json body
 	if hc.body != nil {
 		// TODO: Check type and parse accordingly, i.e. require application/json
-		v := reflect.New(hc.body.obj)
-		if r.Body == nil {
-			validationError = "No JSON body is suppiled"
-			goto fail
-		}
-		err := json.NewDecoder(r.Body).Decode(v.Interface())
+		v, err := hc.parseBody(r)
 		if err != nil {
-			validationError = "Submitted request body is not JSON"
+			ins[hc.body.idx] = *v
+		} else {
 			goto fail
 		}
-		isValid, err := govalidator.ValidateStruct(v.Interface())
-		if !isValid {
-			validationError = fmt.Sprintf("Submitted body is not valid: %s", err.Error())
-			goto fail
-		}
-		ins[hc.body.idx] = v.Elem()
 	}
 
 	if hc.query != nil {
-		v := reflect.New(hc.query.obj).Elem()
-		fields := hc.query.obj.NumField()
-
-		for i := 0; i < fields; i++ {
-			field := hc.query.obj.Field(i)
-			content := r.URL.Query().Get(field.Name)
-			if content == "" {
-				validationError = fmt.Sprintf("Required query parameter not found: %s", field.Name)
-				goto fail
-			} else {
-				// TODO: Convert it to appropriate type later
-				field2 := v.FieldByName(field.Name)
-				kind := field2.Kind()
-
-				if kind == reflect.Int {
-					i, err := strconv.ParseInt(content, 10, 64)
-					if err != nil {
-						validationError = fmt.Sprintf("Expected integer for field %s, but found '%s' instead", err.Error(), content)
-						goto fail
-					}
-					field2.SetInt(i)
-				} else if kind == reflect.String {
-					field2.SetString(content)
-				} else {
-					validationError = fmt.Sprintf("Unknown type for field: %s", content)
-					goto fail
-				}
-			}
-		}
-
-		isValid, err := govalidator.ValidateStruct(v.Interface())
-		if !isValid {
-			validationError = fmt.Sprintf("Query parameter is not valid: %s", err.Error())
+		v, err := hc.parseQuery(r)
+		if err != nil {
+			ins[hc.query.idx] = *v
+		} else {
 			goto fail
 		}
-		ins[hc.query.idx] = v
 	}
 
 	// Try to put as-is dependencies such as db connections
@@ -314,19 +354,27 @@ nofail:
 		if !out.IsNil() {
 			err = out.Interface().(error)
 		}
-	} else if hc.outCode != nil {
+	}
+
+	if hc.outCode != nil {
 		out := outs[hc.outCode.idx]
 		resCode = out.Interface().(int)
-	} else if hc.outResponse != nil {
+	}
+
+	if hc.outResponse != nil {
 		out := outs[hc.outResponse.idx]
+		// else?
 		if !out.CanAddr() || !out.IsNil() {
 			response = out.Interface()
 		}
-	} else if hc.outStopChain != nil {
+	}
+
+	if hc.outStopChain != nil {
 		// bool cannot be nil (it is not *bool)
 		response = outs[hc.outStopChain.idx].Bool()
 	}
-	// what to do with them is responsbility of the other functions
+
+	// what to do with them is responsibility of the other functions
 	return resCode, stopChain, response, err
 }
 
@@ -361,7 +409,7 @@ func wrapHandlers(injector *Injector, path string, fns ...interface{}) httproute
 
 		for idx, hc := range hcs {
 			handlerStartTime := time.Now()
-			status, stopChain, res, err := hc.execute(injector, w, r)
+			status, stopChain, res, err := hc.execute(injector, w, r, ps)
 
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
@@ -388,7 +436,7 @@ func wrapHandlers(injector *Injector, path string, fns ...interface{}) httproute
 				break
 			}
 
-			// TODO: Eliminate logrus 
+			// TODO: Eliminate logrus
 			log.WithFields(log.Fields{
 				"matchedPath": path,
 				"path":        r.URL.Path,

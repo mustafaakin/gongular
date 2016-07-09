@@ -18,6 +18,10 @@ type UserSession2 struct {
 	Username string
 }
 
+type UserParam struct {
+	Username string
+}
+
 func main() {
 	// Not very important, just to see proper colored log output in Intellij IDEA
 	logrus.SetFormatter(&logrus.TextFormatter{ForceColors: true})
@@ -28,6 +32,10 @@ func main() {
 	r := gongular.NewRouter()
 	r.GET("/", func(r *http.Request) string {
 		return "Hello: " + r.RemoteAddr
+	})
+
+	r.GET("/user/:Username", func (u UserParam) string{
+		return "Hi " + u.Username
 	})
 
 	r.ProvideCustom(UserSession{}, func(w http.ResponseWriter, r *http.Request) (error, interface{}) {
