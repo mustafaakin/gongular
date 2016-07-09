@@ -30,8 +30,8 @@ type LoginBody struct {
 }
 
 type RegisterBody struct {
-	Username string  `valid:"alphanum"`
-	Password string  `valid:"numeric"`
+	Username string `valid:"alphanum"`
+	Password string `valid:"numeric"`
 }
 
 type RegisterResponse struct {
