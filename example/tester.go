@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/mustafaakin/gongular"
 	"log"
+	"time"
 )
 
 type UserSession struct {
@@ -21,6 +22,21 @@ type UserParam struct {
 type TestQuery struct {
 	Username string
 	Age      int
+}
+
+type LoginBody struct {
+	Username string
+	Password string
+}
+
+type RegisterBody struct {
+	Username string  `valid:"alphanum"`
+	Password string  `valid:"numeric"`
+}
+
+type RegisterResponse struct {
+	Key  string
+	Time time.Time
 }
 
 func main() {
@@ -41,6 +57,17 @@ func main() {
 			return q.Username + ", you are young, sorry. No wheels."
 		} else {
 			return "Hey " + q.Username + ", you are a grown up, do what you want."
+		}
+	})
+
+	r.POST("/login", func(b LoginBody) bool {
+		return b.Username == "mustafa" && b.Password == "123"
+	})
+
+	r.POST("/register", func(b RegisterBody) RegisterResponse {
+		return RegisterResponse{
+			Key:  b.Username + "-" + b.Password,
+			Time: time.Now(),
 		}
 	})
 

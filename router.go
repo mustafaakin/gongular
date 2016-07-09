@@ -95,7 +95,7 @@ func (r *Router) POST(_path string, handlers ...interface{}) {
 	resultingPath, combinedHandlers := r.subpath(_path, handlers)
 
 	fn := r.wrapHandlers(r.injector, resultingPath, combinedHandlers...)
-	r.router.GET(resultingPath, fn)
+	r.router.POST(resultingPath, fn)
 	r.printBindingMessage(resultingPath, "POST", handlers...)
 }
 
@@ -153,13 +153,12 @@ func (router *Router) wrapHandlers(injector *Injector, path string, fns ...inter
 
 	fn := func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		startTime := time.Now()
-		// reqIdentificationNo := uuid.NewV4()
 
 		// TODO: Eliminate this with using custom error handler of httprouter
-		var err2 error
 		defer func() {
 			r := recover()
 			if r != nil {
+				var err2 error
 				switch t := r.(type) {
 				case string:
 					err2 = errors.New(t)
@@ -169,6 +168,7 @@ func (router *Router) wrapHandlers(injector *Injector, path string, fns ...inter
 					err2 = errors.New("Unknown error")
 				}
 				// log.WithError(err2).WithField("uuid", reqIdentificationNo).Error("An error occcured while serving request")
+				router.InfoLog.Println("An error occured while serving request: " + err2.Error())
 				http.Error(w, "An internal error has occured.", http.StatusInternalServerError)
 			}
 		}()
@@ -197,12 +197,12 @@ func (router *Router) wrapHandlers(injector *Injector, path string, fns ...inter
 				break
 			}
 
-			router.DebugLog.Printf("%-5s %-40s %-40s %5s\n", r.Method, r.URL.Path, hc.fn.String(), time.Since(handlerStartTime).String())
+			router.DebugLog.Printf("%-5s %-30s %-30s %10s\n", r.Method, r.URL.Path, hc.fn.String(), time.Since(handlerStartTime).String())
 		}
 
 		// Finally write the request to client
 		bytes := c.finalize()
-		router.InfoLog.Printf("%-5s %-40s %-40s %5s %4d %d\n", r.Method, r.URL.Path, path, time.Since(startTime).String(), c.status, bytes)
+		router.InfoLog.Printf("%-5s %-30s %-30s %10s %4d %d\n", r.Method, r.URL.Path, path, time.Since(startTime).String(), c.status, bytes)
 	}
 
 	return fn

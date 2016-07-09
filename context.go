@@ -86,3 +86,9 @@ func (c *Context) finalize() int {
 	}
 	return 0
 }
+
+func (c *Context) Fail(status int, msg interface{}) {
+	c.StopChain()
+	c.Status(status)
+	c.SetBodyJSON(msg)
+}
