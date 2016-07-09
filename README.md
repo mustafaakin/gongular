@@ -9,19 +9,38 @@ gongular is an HTTP Server Framework for developing API. It is like Gin Gonic, b
 gongular aims to be simple as much as possible while providing flexibility. The below example is enough to reply user with its IP.
 
 ```go
-r := gongular.NewRouter()
-r.GET("/", func(r *http.Request) string{
-    return "Hello: " + r.RemoteAddr
-})
+	type WelcomeMessage struct {
+		Message string
+		Date    time.Time
+	}
 
-r.ListenAndServe(":8000")
+	g := gongular.NewRouter()
+	g.GET("/", func(c *gongular.Context) WelcomeMessage {
+		return WelcomeMessage{
+			Message: "Hello, you are coming from: " + c.Request().RemoteAddr,
+			Date:    time.Now(),
+		}
+	})
 ```
 
 And output is:
 
 ```
-INFO[0000] Handler registerging                          handler=func(*http.Request) string index=0 method=GET path=/
-INFO[0000] Listening on HTTP                             address=:8000
+[INFO ] 2016/07/09 18:34:16 GET   /                                        func(*gongular.Context) main.WelcomeMessage
+[INFO ] 2016/07/09 18:34:16 Listening HTTP on :8000
+```
+
+When you make a request, you will see how much time passed in your handler, and bytes served and total time including JSON encoding.
+
+```
+➜ curl localhost:8000/
+{
+  "Message": "Hello, you are coming from: 127.0.0.1:39018",
+  "Date": "2016-07-09T18:34:23.88065349+03:00"
+}
+
+[DEBUG] 2016/07/09 18:34:23 GET   /                              <func(*gongular.Context) main.WelcomeMessage Value>   33.004µs
+[INFO ] 2016/07/09 18:34:23 GET   /                              /                                                     93.106µs  200 110
 ```
 
 ## How to install 
@@ -34,23 +53,20 @@ Route handler functions are flexible. They can have various parameters or output
 
 Allowed **input types**:
 
-* `*http.Request`       : original http request object
-* `http.ResponseWriter` : you can manually use the response writer if you wish but should not be needed in most cases
-* `SomethingBody`       :  if given struct's name ends with body, it binds HTTP request body, treating it as a JSON
+* `*gongular.Context`   : Wrapper for http request and http response writer, that has some useful utilities
+* `SomethingBody`       : if given struct's name ends with body, it binds HTTP request body, treating it as a JSON
 * `SomethingQuery`      : if given struct's name ends with query, it bind the query params 
 * `SomethingParam`      : if given struct's name ends with param, it binds the URL params
 
 Allowed **output types**:
 
-* `int`              : Indicates a HTTP status code, if -1, ignored
-* `boolean`          : Stops request handler chain, useful in grouping routes
-* `error`            : An internal error that displays an error message to request and logs details in console
-* `struct or string` : Renders the given struct/string as JSON to user
+* `error`  : An internal error that displays an error message to request and logs details in console
+* `any`    : Renders the given value as a JSON to user
 
 So, the following is completly valid, you can use any number of inputs or outputs. 
 
 ```go
-func (w http.ResponseWriter, r *http.Request, body SomethingBody, query SomethingQuery, param SomethingParam) (int, boolean, error, SomethingOutput){
+func (c *gongular.Context, body SomethingBody, query SomethingQuery, param SomethingParam) (error, SomethingOutput){
     
 }
 ```
@@ -74,7 +90,7 @@ g := r.Group("/admin", CheckAdminAuth)
 
 ## Path Parameters
 
-We use [gorilla/mux](https://github.com/gorilla/mux) to multiplex requests and do parametric binding to requests. So the format `{VariableName}` is supported in paths. Note that, you can use `valid` struct tag to validate parameters. We use [asaskevich/govalidator](https://github.com/asaskevich/govalidator) as a validation framework. If the supplied input does not pass the validation step, `http.StatusBadRequest (400)` is returned the user with the cause.
+We use [julienschmidt/httprouter](https://github.com/julienschmidt/httprouter) to multiplex requests and do parametric binding to requests. So the format `:VariableName, *somepath` is supported in paths. Note that, you can use `valid` struct tag to validate parameters. We use [asaskevich/govalidator](https://github.com/asaskevich/govalidator) as a validation framework. If the supplied input does not pass the validation step, `http.StatusBadRequest (400)` is returned the user with the cause.
 
 Also, note that, the struct name must end with **Param**
 
