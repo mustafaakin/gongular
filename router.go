@@ -4,58 +4,82 @@ import (
 	"net/http"
 	"path"
 	"reflect"
-	"os"
 
-	log "github.com/Sirupsen/logrus"
-	"github.com/gorilla/mux"
+	"errors"
+	"github.com/julienschmidt/httprouter"
+	"io/ioutil"
+	"log"
+	"os"
+	"time"
 )
 
-// SetLogrys, temprorary fix for logging since logrus id vendor'ed we cannot change it in our app
-func SetLogrus(){
-	log.SetFormatter(&log.TextFormatter{ForceColors: true})
-	log.SetOutput(os.Stdout)
+// ErrorHandle is the function signature that must be implemented to provide a custom Error Handler
+type ErrorHandle func(e error, c *Context)
+
+// DefaultErrorHandle writes 500 and displays error to user.
+var DefaultErrorHandle = func(err error, c *Context) {
+	c.StopChain()
+	c.Status(http.StatusInternalServerError)
+	c.SetBodyJSON(map[string]string{
+		"error": err.Error(),
+	})
 }
 
 // Router holds information about overall router and inner objects such as
 // prefix and additional handlers
 type Router struct {
-	muxer    *mux.Router
-	injector *Injector
-	prefix   string
-	handlers []interface{}
+	router       *httprouter.Router
+	injector     *Injector
+	prefix       string
+	handlers     []interface{}
+	InfoLog      *log.Logger
+	DebugLog     *log.Logger
+	ErrorHandler ErrorHandle
 }
 
 // NewRouter initiates a router object with default params
 func NewRouter() *Router {
 	r := &Router{
-		muxer:    mux.NewRouter(),
-		injector: NewInjector(),
-		prefix:   "",
-		handlers: make([]interface{}, 0),
+		router:       httprouter.New(),
+		injector:     NewInjector(),
+		prefix:       "",
+		handlers:     make([]interface{}, 0),
+		InfoLog:      log.New(os.Stdout, "[INFO ] ", log.LstdFlags),
+		DebugLog:     log.New(os.Stdout, "[DEBUG] ", log.LstdFlags),
+		ErrorHandler: DefaultErrorHandle,
 	}
+
 	return r
 }
 
-func(r *Router) GetMuxer() *mux.Router {
-	return r.muxer
+// DisableDebug disables the debug outputs that might be too much for some people
+func (r *Router) DisableDebug() {
+	r.DebugLog.SetOutput(ioutil.Discard)
+	r.DebugLog.SetFlags(0)
 }
 
-func (r *Router) GetHandler() (http.Handler){
-	return r.muxer
+// EnableDebug enables the debug outputs
+func (r *Router) EnableDebug() {
+	r.DebugLog.SetOutput(os.Stdout)
+	r.DebugLog.SetFlags(log.LstdFlags)
+}
+
+// GetHandler returns the http.Handler so that it can be used in HTTP servers
+func (r *Router) GetHandler() http.Handler {
+	return r.router
 }
 
 // ListenAndServe starts a web server at given addr
-func (r *Router) ListenAndServe(addr string) (error) {
-	log.WithField("address", addr).Info("Listening on HTTP")
-	return http.ListenAndServe(addr, r.muxer)
+func (r *Router) ListenAndServe(addr string) error {
+	r.InfoLog.Println("Listening HTTP on " + addr)
+	return http.ListenAndServe(addr, r.router)
 }
 
 // subpath initiates a new route with path and handlers, useful for grouping
 func (r *Router) subpath(_path string, handlers []interface{}) (string, []interface{}) {
 	combinedHandlers := r.handlers
-	for _, handler := range handlers {
-		combinedHandlers = append(combinedHandlers, handler)
-	}
+	combinedHandlers = append(combinedHandlers, handlers...)
+
 	resultingPath := path.Join(r.prefix, _path)
 	return resultingPath, combinedHandlers
 }
@@ -64,32 +88,37 @@ func (r *Router) subpath(_path string, handlers []interface{}) (string, []interf
 func (r *Router) GET(_path string, handlers ...interface{}) {
 	resultingPath, combinedHandlers := r.subpath(_path, handlers)
 
-	r.muxer.HandleFunc(resultingPath, wrapHandlers(r.injector, resultingPath, combinedHandlers...)).Methods("GET")
-	printBindingMessage(resultingPath, "GET", combinedHandlers...)
+	fn := r.wrapHandlers(r.injector, resultingPath, combinedHandlers...)
+	r.router.GET(resultingPath, fn)
+
+	r.printBindingMessage(resultingPath, "GET", combinedHandlers...)
 }
 
 // POST registers given set of handlers to a POST request at path
-func (r *Router) POST(path string, handlers ...interface{}) {
-	r.muxer.HandleFunc(path, wrapHandlers(r.injector, path, handlers...)).Methods("POST")
-	printBindingMessage(path, "POST", handlers...)
+func (r *Router) POST(_path string, handlers ...interface{}) {
+	resultingPath, combinedHandlers := r.subpath(_path, handlers)
+
+	fn := r.wrapHandlers(r.injector, resultingPath, combinedHandlers...)
+	r.router.POST(resultingPath, fn)
+	r.printBindingMessage(resultingPath, "POST", handlers...)
 }
 
 // Group groups a given path with additional interfaces. It is useful to avoid
 // repetitions while defining many paths
 func (r *Router) Group(_path string, handlers ...interface{}) *Router {
 	newRouter := &Router{
-		muxer:    r.muxer,
+		router:   r.router,
 		injector: r.injector,
 		prefix:   path.Join(r.prefix, _path),
+		InfoLog:  r.InfoLog,
+		DebugLog: r.DebugLog,
 	}
 
 	// Copy previous handlers references
 	copy(r.handlers, newRouter.handlers)
 
 	// Append new handlers
-	for _, handler := range handlers {
-		newRouter.handlers = append(newRouter.handlers, handler)
-	}
+	newRouter.handlers = append(newRouter.handlers, handlers...)
 
 	return newRouter
 }
@@ -106,19 +135,77 @@ func (r *Router) ProvideCustom(value interface{}, fn CustomProvideFunction) {
 }
 
 // Static serves static files from a given base, without any prefix
-func (r *Router) Static(base string){
-	r.muxer.PathPrefix("/").Handler(http.FileServer(http.Dir(base)))
+func (r *Router) Static(prefix, base string) {
+	r.router.ServeFiles(path.Join(prefix, "*filepath"), http.Dir(base))
 }
 
-
 // Prints the binding message for a route
-func printBindingMessage(path, method string, handlers ...interface{}) {
-	for idx, handler := range handlers {
-		log.WithFields(log.Fields{
-			"path":    path,
-			"handler": reflect.TypeOf(handler),
-			"method":  method,
-			"index":   idx,
-		}).Info("Handler registerging")
+func (r *Router) printBindingMessage(path, method string, handlers ...interface{}) {
+	for _, handler := range handlers {
+		r.InfoLog.Printf("%-5s %-40s %-20s\n", method, path, reflect.TypeOf(handler))
 	}
+}
+
+func (r *Router) wrapHandlers(injector *Injector, path string, fns ...interface{}) httprouter.Handle {
+	// Determine parameter types
+	hcs := make([]*handlerContext, len(fns))
+	for idx, fn := range fns {
+		hcs[idx] = convertHandler(injector, fn)
+	}
+
+	fn := func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+		startTime := time.Now()
+
+		// TODO: Eliminate this with using custom error handler of httprouter
+		defer func() {
+			rec := recover()
+			if rec != nil {
+				var err error
+				switch t := rec.(type) {
+				case string:
+					err = errors.New(t)
+				case error:
+					err = t
+				default:
+					err = errors.New("Unknown error")
+				}
+
+				r.InfoLog.Println("An error occured while serving request: " + err.Error())
+				http.Error(w, "An internal error has occured.", http.StatusInternalServerError)
+			}
+		}()
+
+		// Create a context that will be used among multiple headers
+		c := ContextFromRequest(w, req, r.InfoLog)
+
+		for _, hc := range hcs {
+			handlerStartTime := time.Now()
+			res, err := hc.execute(injector, c, ps)
+
+			if err != nil {
+				r.ErrorHandler(err, c)
+			}
+
+			// If error is nil, and user is returning error, its his problem
+			if hc.outResponse != nil {
+				if res != nil {
+					c.SetBodyJSON(res)
+				}
+				// TODO: Else what?
+			}
+
+			// We stop chain if it is required
+			if c.stopChain {
+				break
+			}
+
+			r.DebugLog.Printf("%-5s %-30s %-30s %10s\n", req.Method, req.URL.Path, hc.fn.String(), time.Since(handlerStartTime).String())
+		}
+
+		// Finally write the request to client
+		bytes := c.finalize()
+		r.InfoLog.Printf("%-5s %-30s %-30s %10s %4d %d\n", req.Method, req.URL.Path, path, time.Since(startTime).String(), c.status, bytes)
+	}
+
+	return fn
 }

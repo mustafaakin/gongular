@@ -2,12 +2,9 @@ package main
 
 import (
 	"errors"
-	"github.com/Sirupsen/logrus"
 	"github.com/mustafaakin/gongular"
 	"log"
-	"net/http"
-	"os"
-	"fmt"
+	"time"
 )
 
 type UserSession struct {
@@ -18,41 +15,80 @@ type UserSession2 struct {
 	Username string
 }
 
-func main() {
-	// Not very important, just to see proper colored log output in Intellij IDEA
-	logrus.SetFormatter(&logrus.TextFormatter{ForceColors: true})
-	logrus.SetOutput(os.Stdout)
-	log.SetOutput(os.Stdout)
+type UserParam struct {
+	Username string
+}
 
+type TestQuery struct {
+	Username string
+	Age      int
+}
+
+type LoginBody struct {
+	Username string
+	Password string
+}
+
+type RegisterBody struct {
+	Username string  `valid:"alphanum"`
+	Password string  `valid:"numeric"`
+}
+
+type RegisterResponse struct {
+	Key  string
+	Time time.Time
+}
+
+func main() {
 	// Create a new Router, currently no options required
 	r := gongular.NewRouter()
-	r.GET("/", func(r *http.Request) string {
-		return "Hello: " + r.RemoteAddr
+	r.DisableDebug()
+
+	r.GET("/", func(c *gongular.Context) string {
+		return "Hello" + c.Request().UserAgent()
 	})
 
-	r.ProvideCustom(UserSession{}, func(w http.ResponseWriter, r *http.Request) (error, interface{}) {
-		w.WriteHeader(http.StatusUnauthorized)
-		fmt.Fprintf(w, "Sorry but you are unauthorized")
-		return nil, nil
+	r.GET("/user/:Username", func(u UserParam) string {
+		return "Hi " + u.Username
 	})
 
-	r.ProvideCustom(UserSession2{}, func(w http.ResponseWriter, r *http.Request) (error, interface{}) {
-		return errors.New("could not connect to db"), nil
+	r.GET("/canYouDrive", func(q TestQuery) string {
+		if q.Age < 18 {
+			return q.Username + ", you are young, sorry. No wheels."
+		} else {
+			return "Hey " + q.Username + ", you are a grown up, do what you want."
+		}
 	})
 
-	r.GET("/provideFail", func(u UserSession) string {
-		return "Username: " + u.Username
+	r.POST("/login", func(b LoginBody) bool {
+		return b.Username == "mustafa" && b.Password == "123"
 	})
 
-	r.GET("/provideFail2", func(u UserSession2) string {
-		return "Username: " + u.Username
+	r.POST("/register", func(b RegisterBody) RegisterResponse {
+		return RegisterResponse{
+			Key:  b.Username + "-" + b.Password,
+			Time: time.Now(),
+		}
 	})
 
-	r.Static("example/static")
+	r.GET("/error", func() error {
+		return errors.New("It' s a trap")
+	})
+
+	a := r.Group("/admin", func(c *gongular.Context) {
+		log.Println("Dangerous action, admin stuff..")
+	})
+	{
+		a.GET("/exterminate", func() string {
+			return "Exterminated"
+		})
+	}
+
+	r.Static("/assets", "example/static")
 
 	// Default listen and serve
 	err := r.ListenAndServe(":8000")
 	if err != nil {
-		logrus.Fatal(err)
+		log.Fatal(err)
 	}
 }
