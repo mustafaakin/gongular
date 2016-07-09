@@ -11,7 +11,6 @@ import (
 	"errors"
 	"github.com/asaskevich/govalidator"
 	"github.com/julienschmidt/httprouter"
-	"log"
 )
 
 var ErrNoJsonBody = errors.New("No JSON body is suppiled")
@@ -30,8 +29,7 @@ type handlerContext struct {
 	customArgs []*funcArg
 
 	// HTTP Request , Response Writer
-	resWriter *funcArg
-	req       *funcArg
+	context *funcArg
 
 	// Input Fields
 	query *funcArg
@@ -40,10 +38,8 @@ type handlerContext struct {
 	param *funcArg
 
 	// Output Fields
-	outErr       *funcArg
-	outResponse  *funcArg
-	outCode      *funcArg
-	outStopChain *funcArg
+	outErr      *funcArg
+	outResponse *funcArg
 
 	// Function information
 	fn     reflect.Value
@@ -70,47 +66,31 @@ func convertHandler(ij *Injector, fn interface{}) *handlerContext {
 	for i := 0; i < t.NumIn(); i++ {
 		in := t.In(i)
 
+		arg := &funcArg{
+			idx: i,
+			obj: in,
+		}
+
 		// Look if it is in supplied version
 		if _, ok := ij.values[in]; ok {
-			hc.args = append(hc.args, &funcArg{
-				idx: i,
-				obj: in,
-			})
+			hc.args = append(hc.args, arg)
 		} else if _, ok := ij.customProviders[in]; ok {
-			hc.customArgs = append(hc.customArgs, &funcArg{
-				idx: i,
-				obj: in,
-			})
+			hc.customArgs = append(hc.customArgs, arg)
+		} else if in.AssignableTo(reflect.TypeOf(&Context{})) {
+			hc.context = arg
 		} else {
-			httpWriterType := reflect.TypeOf((*http.ResponseWriter)(nil)).Elem()
-			if in.Implements(httpWriterType) {
-				hc.resWriter = &funcArg{
-					idx: i,
-					obj: in,
-				}
-			} else if in.AssignableTo(reflect.TypeOf(&http.Request{})) {
-				hc.req = &funcArg{
-					idx: i,
-					obj: in,
-				}
+			// Get its name and see if it ends with Query, Body, Form or Param
+			name := in.String()
+			if strings.HasSuffix(name, "Body") {
+				hc.body = arg
+			} else if strings.HasSuffix(name, "Form") {
+				hc.form = arg
+			} else if strings.HasSuffix(name, "Query") {
+				hc.query = arg
+			} else if strings.HasSuffix(name, "Param") {
+				hc.param = arg
 			} else {
-				// Get its name and see if it ends with Query, Body, Form or Param
-				name := in.String()
-				arg := &funcArg{
-					idx: i,
-					obj: in,
-				}
-				if strings.HasSuffix(name, "Body") {
-					hc.body = arg
-				} else if strings.HasSuffix(name, "Form") {
-					hc.form = arg
-				} else if strings.HasSuffix(name, "Query") {
-					hc.query = arg
-				} else if strings.HasSuffix(name, "Param") {
-					hc.param = arg
-				} else {
-					panic("Unknown parameter:" + fmt.Sprintf("%s %s", fn, in))
-				}
+				panic("Unknown parameter:" + fmt.Sprintf("%s %s", fn, in))
 			}
 		}
 	}
@@ -129,14 +109,7 @@ func convertHandler(ij *Injector, fn interface{}) *handlerContext {
 			obj: out,
 		}
 
-		if t == reflect.Bool {
-			// Bool is used in middleware to stop the chain.
-			// False is used because if it did not return true, it means abort
-			hc.outStopChain = arg
-		} else if t == reflect.Int {
-			// Int has precedence because it is expected to indicate the response status code
-			hc.outCode = arg
-		} else if t == reflect.Interface {
+		if t == reflect.Interface {
 			// Checks if error, see: http://stackoverflow.com/questions/30688514/go-reflect-how-to-check-whether-reflect-type-is-an-error-type
 			errType := reflect.TypeOf((*error)(nil)).Elem()
 			if out.Implements(errType) {
@@ -216,7 +189,7 @@ func (hc *handlerContext) parseBody(r *http.Request) (*reflect.Value, error) {
 	return &elem, nil
 }
 
-func (hc *handlerContext) parseQuery(r *http.Request) (*reflect.Value, error){
+func (hc *handlerContext) parseQuery(r *http.Request) (*reflect.Value, error) {
 	v := reflect.New(hc.query.obj).Elem()
 	fields := hc.query.obj.NumField()
 
@@ -258,20 +231,16 @@ func (hc *handlerContext) parseQuery(r *http.Request) (*reflect.Value, error){
 
 // execute responds to an http request by using writer and request
 // returns all the possible values
-func (hc *handlerContext) execute(injector *Injector, w http.ResponseWriter, r *http.Request, ps httprouter.Params, logger *log.Logger) (int, bool, interface{}, error) {
+func (hc *handlerContext) execute(injector *Injector, c *Context, ps httprouter.Params) (interface{}, error) {
 	// Prepare inputs to be supplied to hc.fn function
 	ins := make([]reflect.Value, hc.numIn)
 
 	validationError := ""
 
-	// Just put http.ResponseWriter as is
-	if hc.resWriter != nil {
-		ins[hc.resWriter.idx] = reflect.ValueOf(w)
-	}
+	// Create a Gongular.Context object from req
 
-	// Just put the *http.Request as is
-	if hc.req != nil {
-		ins[hc.req.idx] = reflect.ValueOf(r)
+	if hc.context != nil {
+		ins[hc.context.idx] = reflect.ValueOf(c)
 	}
 
 	// Try to fill path params such as /user/:UserId
@@ -287,7 +256,7 @@ func (hc *handlerContext) execute(injector *Injector, w http.ResponseWriter, r *
 	// Try to parse json body
 	if hc.body != nil {
 		// TODO: Check type and parse accordingly, i.e. require application/json
-		v, err := hc.parseBody(r)
+		v, err := hc.parseBody(c.r)
 		if err != nil {
 			ins[hc.body.idx] = *v
 		} else {
@@ -296,7 +265,7 @@ func (hc *handlerContext) execute(injector *Injector, w http.ResponseWriter, r *
 	}
 
 	if hc.query != nil {
-		v, err := hc.parseQuery(r)
+		v, err := hc.parseQuery(c.r)
 		if err != nil {
 			ins[hc.query.idx] = *v
 		} else {
@@ -319,12 +288,14 @@ func (hc *handlerContext) execute(injector *Injector, w http.ResponseWriter, r *
 	for _, arg := range hc.customArgs {
 		// Check if it exists on execution-injectable values then
 		if fn, ok := injector.customProviders[arg.obj]; ok {
-			err_internal, out := fn(w, r)
+			err_internal, out := fn(c.w, c.r)
 			if err_internal != nil {
-				logger.Printf("Could not provide custom value '%s' to do an error: '%s'\n", arg.obj, err_internal)
-				return http.StatusInternalServerError, true, "An internal error has occured", nil
+				c.logger.Printf("Could not provide custom value '%s' to do an error: '%s'\n", arg.obj, err_internal)
+				return "An internal error has occured", nil
 			} else if out == nil {
-				return -1, true, "", nil
+				// TODO: Nil provided? Log?
+				c.StopChain()
+				return "", nil
 			} else {
 				ins[arg.idx] = reflect.ValueOf(out)
 			}
@@ -335,14 +306,14 @@ func (hc *handlerContext) execute(injector *Injector, w http.ResponseWriter, r *
 
 	goto nofail
 fail:
-	return http.StatusBadRequest, true, validationError, nil
+	c.StopChain()
+	c.Status(http.StatusBadRequest)
+	return validationError, nil
 nofail:
 	// Call the function with supplied values
 	outs := hc.fn.Call(ins)
 
 	var err error
-	resCode := -1
-	var stopChain bool
 	var response interface{}
 
 	// TODO: Wrong logic here fix, why else if? we set them no matter what
@@ -353,11 +324,6 @@ nofail:
 		}
 	}
 
-	if hc.outCode != nil {
-		out := outs[hc.outCode.idx]
-		resCode = out.Interface().(int)
-	}
-
 	if hc.outResponse != nil {
 		out := outs[hc.outResponse.idx]
 		// else?
@@ -366,11 +332,6 @@ nofail:
 		}
 	}
 
-	if hc.outStopChain != nil {
-		// bool cannot be nil (it is not *bool)
-		response = outs[hc.outStopChain.idx].Bool()
-	}
-
 	// what to do with them is responsibility of the other functions
-	return resCode, stopChain, response, err
+	return response, err
 }

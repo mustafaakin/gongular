@@ -5,48 +5,54 @@ import (
 	"path"
 	"reflect"
 
-	"encoding/json"
 	"errors"
 	"github.com/julienschmidt/httprouter"
-	"log"
-	"time"
-	"os"
 	"io/ioutil"
+	"log"
+	"os"
+	"time"
 )
 
 // Router holds information about overall router and inner objects such as
 // prefix and additional handlers
 type Router struct {
-	router    *httprouter.Router
-	injector  *Injector
-	prefix    string
-	handlers  []interface{}
-	InfoLog   *log.Logger
-	DebugLog  *log.Logger
+	router   *httprouter.Router
+	injector *Injector
+	prefix   string
+	handlers []interface{}
+	InfoLog  *log.Logger
+	DebugLog *log.Logger
 }
 
 // NewRouter initiates a router object with default params
 func NewRouter() *Router {
 	r := &Router{
-		router:    httprouter.New(),
-		injector:  NewInjector(),
-		prefix:    "",
-		handlers:  make([]interface{}, 0),
-		InfoLog :  log.New(os.Stdout, "[INFO ] ", log.LstdFlags),
-		DebugLog:  log.New(os.Stdout, "[DEBUG] ", log.LstdFlags),
+		router:   httprouter.New(),
+		injector: NewInjector(),
+		prefix:   "",
+		handlers: make([]interface{}, 0),
+		InfoLog:  log.New(os.Stdout, "[INFO ] ", log.LstdFlags),
+		DebugLog: log.New(os.Stdout, "[DEBUG] ", log.LstdFlags),
 	}
+
+	/*
+		r.router.NotFound = func(w http.ResponseWriter, r *http.Request, _ httprouter.Params){
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprintf(w, "Not found")
+		}
+	*/
 
 	// TODO: Set panic handler
 	// r.router.PanicHandler =
 	return r
 }
 
-func (r *Router) DisableDebug(){
+func (r *Router) DisableDebug() {
 	r.DebugLog.SetOutput(ioutil.Discard)
 	r.DebugLog.SetFlags(0)
 }
 
-func (r *Router) EnableDebug(){
+func (r *Router) EnableDebug() {
 	r.DebugLog.SetOutput(os.Stdout)
 	r.DebugLog.SetFlags(log.LstdFlags)
 }
@@ -93,9 +99,9 @@ func (r *Router) POST(_path string, handlers ...interface{}) {
 // repetitions while defining many paths
 func (r *Router) Group(_path string, handlers ...interface{}) *Router {
 	newRouter := &Router{
-		router:    r.router,
-		injector:  r.injector,
-		prefix:    path.Join(r.prefix, _path),
+		router:   r.router,
+		injector: r.injector,
+		prefix:   path.Join(r.prefix, _path),
 	}
 
 	// Copy previous handlers references
@@ -142,7 +148,6 @@ func (router *Router) wrapHandlers(injector *Injector, path string, fns ...inter
 	fn := func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		startTime := time.Now()
 		// reqIdentificationNo := uuid.NewV4()
-		responseStatus := -1;
 
 		// TODO: Eliminate this with using custom error handler of httprouter
 		var err2 error
@@ -162,46 +167,37 @@ func (router *Router) wrapHandlers(injector *Injector, path string, fns ...inter
 			}
 		}()
 
+		// Create a context that will be used among multiple headers
+		c := ContextFromRequest(w, r, router.InfoLog)
+
 		for _, hc := range hcs {
 			handlerStartTime := time.Now()
-			status, stopChain, res, err := hc.execute(injector, w, r, ps, router.InfoLog)
+			res, err := hc.execute(injector, c, ps)
 
+			// TODO: Check context
 			if err != nil {
-				// TODO: Custom error handler
-				responseStatus = http.StatusInternalServerError
-				w.WriteHeader(responseStatus)
-				w.Header().Set("Content-Type", "application/json")
-				break
-			}
 
-			// Status is default -1
-			if responseStatus  != -1 && hc.outCode != nil || status >= 100 {
-				responseStatus = status
-				w.WriteHeader(status)
 			}
 
 			if hc.outResponse != nil {
 				// If empty, don't return anything
 				if res != nil {
-					w.Header().Set("Content-Type", "application/json")
-					if responseStatus == -1 {
-						// Meaning no one set the status before
-						responseStatus = http.StatusOK
-					}
-					json.NewEncoder(w).Encode(res)
+					c.SetBodyJSON(res)
 				}
 				// TODO: Else what?
 			}
 
 			// We stop chain if it is required, after setting status and output
-			if hc.outStopChain != nil && stopChain == true {
-				// Stopping the chain of execution
+			if c.stopChain {
 				break
 			}
 
 			router.DebugLog.Printf("%-5s %-40s %-40s %5s\n", r.Method, r.URL.Path, hc.fn.String(), time.Since(handlerStartTime).String())
 		}
-		router.InfoLog.Printf("%-5s %-40s %-40s %5s %4d\n", r.Method, r.URL.Path, path, time.Since(startTime).String(), responseStatus)
+
+		// Finally write the request to client
+		bytes := c.finalize()
+		router.InfoLog.Printf("%-5s %-40s %-40s %5s %4d %d\n", r.Method, r.URL.Path, path, time.Since(startTime).String(), c.status, bytes)
 	}
 
 	return fn
