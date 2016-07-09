@@ -128,22 +128,23 @@ func (hc *handlerContext) parseParams(ps httprouter.Params) (*reflect.Value, str
 		field := hc.param.obj.Field(i)
 		content := ps.ByName(field.Name)
 		if content == "" {
-			return nil, fmt.Sprintf("param ", field.Name, " does not exist")
-		} else {
-			field2 := v.FieldByName(field.Name)
-			kind := field2.Kind()
-			if kind == reflect.Int {
-				i, err := strconv.ParseInt(content, 10, 64)
-				if err != nil {
-					return nil, fmt.Sprintf("Expected integer for param field %s, but found '%s' instead", field.Name, content)
-				}
-				field2.SetInt(i)
-			} else if kind == reflect.String {
-				field2.SetString(content)
-			} else {
-				return nil, fmt.Sprintf("Unknown type for param field:" + content)
-			}
+			return nil, fmt.Sprintf("param %s does not exist", field.Name)
 		}
+
+		field2 := v.FieldByName(field.Name)
+		kind := field2.Kind()
+		if kind == reflect.Int {
+			i, err := strconv.ParseInt(content, 10, 64)
+			if err != nil {
+				return nil, fmt.Sprintf("Expected integer for param field %s, but found '%s' instead", field.Name, content)
+			}
+			field2.SetInt(i)
+		} else if kind == reflect.String {
+			field2.SetString(content)
+		} else {
+			return nil, fmt.Sprintf("Unknown type for param field:" + content)
+		}
+
 	}
 
 	isValid, err := govalidator.ValidateStruct(v.Interface())
@@ -189,22 +190,20 @@ func (hc *handlerContext) parseQuery(r *http.Request) (*reflect.Value, string) {
 		content := r.URL.Query().Get(field.Name)
 		if content == "" {
 			return nil, fmt.Sprintf("Required query parameter not found: %s", field.Name)
-		} else {
-			// TODO: Convert it to appropriate type later
-			field2 := v.FieldByName(field.Name)
-			kind := field2.Kind()
+		}
+		field2 := v.FieldByName(field.Name)
+		kind := field2.Kind()
 
-			if kind == reflect.Int {
-				i, err := strconv.ParseInt(content, 10, 64)
-				if err != nil {
-					return nil, fmt.Sprintf("Expected integer for field %s, but found '%s' instead", err.Error(), content)
-				}
-				field2.SetInt(i)
-			} else if kind == reflect.String {
-				field2.SetString(content)
-			} else {
-				return nil, fmt.Sprintf("Unknown type for field: %s", content)
+		if kind == reflect.Int {
+			i, err := strconv.ParseInt(content, 10, 64)
+			if err != nil {
+				return nil, fmt.Sprintf("Expected integer for field %s, but found '%s' instead", err.Error(), content)
 			}
+			field2.SetInt(i)
+		} else if kind == reflect.String {
+			field2.SetString(content)
+		} else {
+			return nil, fmt.Sprintf("Unknown type for field: %s", content)
 		}
 	}
 
@@ -275,9 +274,9 @@ func (hc *handlerContext) execute(injector *Injector, c *Context, ps httprouter.
 	for _, arg := range hc.customArgs {
 		// Check if it exists on execution-injectable values then
 		if fn, ok := injector.customProviders[arg.obj]; ok {
-			err_internal, out := fn(c.w, c.r)
-			if err_internal != nil {
-				c.logger.Printf("Could not provide custom value '%s' to do an error: '%s'\n", arg.obj, err_internal)
+			errInternal, out := fn(c.w, c.r)
+			if errInternal != nil {
+				c.logger.Printf("Could not provide custom value '%s' to do an error: '%s'\n", arg.obj, errInternal)
 				return "An internal error has occured", nil
 			} else if out == nil {
 				// TODO: Nil provided? Log?

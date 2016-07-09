@@ -13,8 +13,10 @@ import (
 	"time"
 )
 
+// ErrorHandle is the function signature that must be implemented to provide a custom Error Handler
 type ErrorHandle func(e error, c *Context)
 
+// DefaultErrorHandle writes 500 and displays error to user.
 var DefaultErrorHandle = func(err error, c *Context) {
 	c.StopChain()
 	c.Status(http.StatusInternalServerError)
@@ -50,16 +52,19 @@ func NewRouter() *Router {
 	return r
 }
 
+// DisableDebug disables the debug outputs that might be too much for some people
 func (r *Router) DisableDebug() {
 	r.DebugLog.SetOutput(ioutil.Discard)
 	r.DebugLog.SetFlags(0)
 }
 
+// EnableDebug enables the debug outputs
 func (r *Router) EnableDebug() {
 	r.DebugLog.SetOutput(os.Stdout)
 	r.DebugLog.SetFlags(log.LstdFlags)
 }
 
+// GetHandler returns the http.Handler so that it can be used in HTTP servers
 func (r *Router) GetHandler() http.Handler {
 	return r.router
 }
@@ -73,9 +78,8 @@ func (r *Router) ListenAndServe(addr string) error {
 // subpath initiates a new route with path and handlers, useful for grouping
 func (r *Router) subpath(_path string, handlers []interface{}) (string, []interface{}) {
 	combinedHandlers := r.handlers
-	for _, handler := range handlers {
-		combinedHandlers = append(combinedHandlers, handler)
-	}
+	combinedHandlers = append(combinedHandlers, handlers...)
+
 	resultingPath := path.Join(r.prefix, _path)
 	return resultingPath, combinedHandlers
 }
@@ -114,9 +118,7 @@ func (r *Router) Group(_path string, handlers ...interface{}) *Router {
 	copy(r.handlers, newRouter.handlers)
 
 	// Append new handlers
-	for _, handler := range handlers {
-		newRouter.handlers = append(newRouter.handlers, handler)
-	}
+	newRouter.handlers = append(newRouter.handlers, handlers...)
 
 	return newRouter
 }
@@ -144,44 +146,44 @@ func (r *Router) printBindingMessage(path, method string, handlers ...interface{
 	}
 }
 
-func (router *Router) wrapHandlers(injector *Injector, path string, fns ...interface{}) httprouter.Handle {
+func (r *Router) wrapHandlers(injector *Injector, path string, fns ...interface{}) httprouter.Handle {
 	// Determine parameter types
 	hcs := make([]*handlerContext, len(fns))
 	for idx, fn := range fns {
 		hcs[idx] = convertHandler(injector, fn)
 	}
 
-	fn := func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	fn := func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		startTime := time.Now()
 
 		// TODO: Eliminate this with using custom error handler of httprouter
 		defer func() {
-			r := recover()
-			if r != nil {
-				var err2 error
-				switch t := r.(type) {
+			rec := recover()
+			if rec != nil {
+				var err error
+				switch t := rec.(type) {
 				case string:
-					err2 = errors.New(t)
+					err = errors.New(t)
 				case error:
-					err2 = t
+					err = t
 				default:
-					err2 = errors.New("Unknown error")
+					err = errors.New("Unknown error")
 				}
-				// log.WithError(err2).WithField("uuid", reqIdentificationNo).Error("An error occcured while serving request")
-				router.InfoLog.Println("An error occured while serving request: " + err2.Error())
+
+				r.InfoLog.Println("An error occured while serving request: " + err.Error())
 				http.Error(w, "An internal error has occured.", http.StatusInternalServerError)
 			}
 		}()
 
 		// Create a context that will be used among multiple headers
-		c := ContextFromRequest(w, r, router.InfoLog)
+		c := ContextFromRequest(w, req, r.InfoLog)
 
 		for _, hc := range hcs {
 			handlerStartTime := time.Now()
 			res, err := hc.execute(injector, c, ps)
 
 			if err != nil {
-				router.ErrorHandler(err, c)
+				r.ErrorHandler(err, c)
 			}
 
 			// If error is nil, and user is returning error, its his problem
@@ -197,12 +199,12 @@ func (router *Router) wrapHandlers(injector *Injector, path string, fns ...inter
 				break
 			}
 
-			router.DebugLog.Printf("%-5s %-30s %-30s %10s\n", r.Method, r.URL.Path, hc.fn.String(), time.Since(handlerStartTime).String())
+			r.DebugLog.Printf("%-5s %-30s %-30s %10s\n", req.Method, req.URL.Path, hc.fn.String(), time.Since(handlerStartTime).String())
 		}
 
 		// Finally write the request to client
 		bytes := c.finalize()
-		router.InfoLog.Printf("%-5s %-30s %-30s %10s %4d %d\n", r.Method, r.URL.Path, path, time.Since(startTime).String(), c.status, bytes)
+		r.InfoLog.Printf("%-5s %-30s %-30s %10s %4d %d\n", req.Method, req.URL.Path, path, time.Since(startTime).String(), c.status, bytes)
 	}
 
 	return fn
