@@ -13,37 +13,40 @@ import (
 	"time"
 )
 
+type ErrorHandle func(e error, c *Context)
+
+var DefaultErrorHandle = func(err error, c *Context) {
+	c.StopChain()
+	c.Status(http.StatusInternalServerError)
+	c.SetBodyJSON(map[string]string{
+		"error": err.Error(),
+	})
+}
+
 // Router holds information about overall router and inner objects such as
 // prefix and additional handlers
 type Router struct {
-	router   *httprouter.Router
-	injector *Injector
-	prefix   string
-	handlers []interface{}
-	InfoLog  *log.Logger
-	DebugLog *log.Logger
+	router       *httprouter.Router
+	injector     *Injector
+	prefix       string
+	handlers     []interface{}
+	InfoLog      *log.Logger
+	DebugLog     *log.Logger
+	ErrorHandler ErrorHandle
 }
 
 // NewRouter initiates a router object with default params
 func NewRouter() *Router {
 	r := &Router{
-		router:   httprouter.New(),
-		injector: NewInjector(),
-		prefix:   "",
-		handlers: make([]interface{}, 0),
-		InfoLog:  log.New(os.Stdout, "[INFO ] ", log.LstdFlags),
-		DebugLog: log.New(os.Stdout, "[DEBUG] ", log.LstdFlags),
+		router:       httprouter.New(),
+		injector:     NewInjector(),
+		prefix:       "",
+		handlers:     make([]interface{}, 0),
+		InfoLog:      log.New(os.Stdout, "[INFO ] ", log.LstdFlags),
+		DebugLog:     log.New(os.Stdout, "[DEBUG] ", log.LstdFlags),
+		ErrorHandler: DefaultErrorHandle,
 	}
 
-	/*
-		r.router.NotFound = func(w http.ResponseWriter, r *http.Request, _ httprouter.Params){
-			w.WriteHeader(http.StatusNotFound)
-			fmt.Fprintf(w, "Not found")
-		}
-	*/
-
-	// TODO: Set panic handler
-	// r.router.PanicHandler =
 	return r
 }
 
@@ -83,6 +86,7 @@ func (r *Router) GET(_path string, handlers ...interface{}) {
 
 	fn := r.wrapHandlers(r.injector, resultingPath, combinedHandlers...)
 	r.router.GET(resultingPath, fn)
+
 	r.printBindingMessage(resultingPath, "GET", combinedHandlers...)
 }
 
@@ -102,6 +106,8 @@ func (r *Router) Group(_path string, handlers ...interface{}) *Router {
 		router:   r.router,
 		injector: r.injector,
 		prefix:   path.Join(r.prefix, _path),
+		InfoLog:  r.InfoLog,
+		DebugLog: r.DebugLog,
 	}
 
 	// Copy previous handlers references
@@ -134,7 +140,7 @@ func (r *Router) Static(prefix, base string) {
 // Prints the binding message for a route
 func (r *Router) printBindingMessage(path, method string, handlers ...interface{}) {
 	for _, handler := range handlers {
-		r.DebugLog.Printf("%-5s %-40s %-20s\n", method, path, reflect.TypeOf(handler))
+		r.InfoLog.Printf("%-5s %-40s %-20s\n", method, path, reflect.TypeOf(handler))
 	}
 }
 
@@ -174,20 +180,19 @@ func (router *Router) wrapHandlers(injector *Injector, path string, fns ...inter
 			handlerStartTime := time.Now()
 			res, err := hc.execute(injector, c, ps)
 
-			// TODO: Check context
 			if err != nil {
-
+				router.ErrorHandler(err, c)
 			}
 
+			// If error is nil, and user is returning error, its his problem
 			if hc.outResponse != nil {
-				// If empty, don't return anything
 				if res != nil {
 					c.SetBodyJSON(res)
 				}
 				// TODO: Else what?
 			}
 
-			// We stop chain if it is required, after setting status and output
+			// We stop chain if it is required
 			if c.stopChain {
 				break
 			}
