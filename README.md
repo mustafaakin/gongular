@@ -2,25 +2,33 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/mustafaakin/gongular)](https://goreportcard.com/report/github.com/mustafaakin/gongular)
 [![GoDoc](https://godoc.org/github.com/mustafaakin/gongular?status.svg)](https://godoc.org/github.com/mustafaakin/gongular)
 
-gongular is an HTTP Server Framework for developing API. It is like Gin Gonic, but it features Angular-like (or Spring like) dependency injection and better input handling. Simple usage is as follows
+gongular is an HTTP Server Framework for developing API. It is like Gin Gonic, but it features Angular-like (or Spring like) dependency injection and better input handling. 
+
+## Features
+
+* Automatic Query, POST Body, URL Param binding to structs with easy validation
+* Easy and simple dependency injection i.e passing DB connections and other values
+* Custom dependency injection with user specified logic, i.e as User struct from a session
+* Static file serving
+* Fast thanks to httprouter!
 
 ## Simple Usage
 
 gongular aims to be simple as much as possible while providing flexibility. The below example is enough to reply user with its IP.
 
 ```go
-	type WelcomeMessage struct {
-		Message string
-		Date    time.Time
-	}
+type WelcomeMessage struct {
+  Message string
+  Date    time.Time
+}
 
-	g := gongular.NewRouter()
-	g.GET("/", func(c *gongular.Context) WelcomeMessage {
-		return WelcomeMessage{
-			Message: "Hello, you are coming from: " + c.Request().RemoteAddr,
-			Date:    time.Now(),
-		}
-	})
+g := gongular.NewRouter()
+g.GET("/", func(c *gongular.Context) WelcomeMessage {
+  return WelcomeMessage{
+    Message: "Hello, you are coming from: " + c.Request().RemoteAddr,
+    Date:    time.Now(),
+  }
+})
 ```
 
 And output is:
