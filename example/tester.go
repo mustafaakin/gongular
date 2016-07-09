@@ -2,9 +2,10 @@ package main
 
 import (
 	"errors"
-	"github.com/mustafaakin/gongular"
 	"log"
 	"time"
+
+	"github.com/mustafaakin/gongular"
 )
 
 type UserSession struct {
