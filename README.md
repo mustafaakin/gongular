@@ -2,15 +2,17 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/mustafaakin/gongular)](https://goreportcard.com/report/github.com/mustafaakin/gongular)
 [![GoDoc](https://godoc.org/github.com/mustafaakin/gongular?status.svg)](https://godoc.org/github.com/mustafaakin/gongular)
 
-gongular is an HTTP Server Framework for developing API. It is like Gin Gonic, but it features Angular-like (or Spring like) dependency injection and better input handling. 
+gongular is an HTTP Server Framework for developing APIs easily. It is like Gin Gonic, but it features Angular-like (or Spring like) dependency injection and better input handling. Most of the time, user input must be transformed into a structured data then it mus be validated. It takes too much time and is a repetitive work, gongular aims to reduce that complexity by providing request-input mapping with tag based validation.
 
 ## Features
 
 * Automatic Query, POST Body, URL Param binding to structs with easy validation
 * Easy and simple dependency injection i.e passing DB connections and other values
 * Custom dependency injection with user specified logic, i.e as User struct from a session
-* Static file serving
-* Fast thanks to httprouter!
+* Route grouping that allows reducing duplicated code
+* Middlewares that can do preliminary work before routes, groups which might be helpful for authentication checks, logging etc.
+* Static file serving 
+* Very fast thanks to httprouter
 
 ## Simple Usage
 
