@@ -37,7 +37,7 @@ func main() {
     "Hello, world"
     ➜  ~ curl localhost:8000/answer
     42
-    ➜  ~ curl localhost:8000/admin/delete
+    ➜  ~ curl localhost:8000/admin/delete   # Logger called twice
     "Hello, world"
 	 */
 }

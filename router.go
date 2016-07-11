@@ -115,7 +115,10 @@ func (r *Router) Group(_path string, handlers ...interface{}) *Router {
 	}
 
 	// Copy previous handlers references
-	copy(r.handlers, newRouter.handlers)
+	newRouter.handlers = make([]interface{}, len(r.handlers))
+	for i, handler := range r.handlers {
+		newRouter.handlers[i] = handler
+	}
 
 	// Append new handlers
 	newRouter.handlers = append(newRouter.handlers, handlers...)

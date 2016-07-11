@@ -48,7 +48,7 @@ type handlerContext struct {
 func convertHandler(ij *Injector, fn interface{}) *handlerContext {
 	t := reflect.TypeOf(fn)
 	if t.Kind() != reflect.Func {
-		panic("Wrapped interface is not a function.")
+		panic("Wrapped interface is not a function, it is a " + t.Kind().String())
 	}
 
 	// Preserve the information about the function here so that
