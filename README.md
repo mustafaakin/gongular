@@ -269,9 +269,9 @@ Note that, errors are used for indicating internal errors. If you supply a value
 
 gongular.Context is a wrapper for http.Request and http.ResponseWriter and contains useful utilities. 
 
-* context.Status(int): sets the status of a response if not set previously
-* context.StopChain(): used to stop the next handlers to be executed, useful in middlewares
-* context.Header(key,value): sets the headers
+* `context.Status(int)`: sets the status of a response if not set previously
+* `context.StopChain()`: used to stop the next handlers to be executed, useful in middlewares
+* `context.Header(key,value)`: sets the HTTP Header (key) to value 
 
 ## Logging
 
