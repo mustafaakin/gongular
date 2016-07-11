@@ -138,7 +138,7 @@ And the output will be:
 
 ## POST JSON Body
 
-```zsh
+```go
 func main() {
 	r := gongular.NewRouter()
 	r.POST("/body", BodyRequest)
