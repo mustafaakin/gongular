@@ -98,6 +98,23 @@ g := r.Group("/admin", CheckAdminAuth)
 }
 ```
 
+## Query Parameters
+
+```go
+func main() {
+	r := gongular.NewRouter()
+	r.GET("/query", QueryRequest)
+	r.ListenAndServe(":8000")
+}
+```
+
+And the output will be:
+
+```zsh
+➜ curl localhost:8000/param/Mustafa
+"Hi: Mustafa"
+```
+
 ## Path Parameters
 
 We use [julienschmidt/httprouter](https://github.com/julienschmidt/httprouter) to multiplex requests and do parametric binding to requests. So the format `:VariableName, *somepath` is supported in paths. Note that, you can use `valid` struct tag to validate parameters. We use [asaskevich/govalidator](https://github.com/asaskevich/govalidator) as a validation framework. If the supplied input does not pass the validation step, `http.StatusBadRequest (400)` is returned the user with the cause.
@@ -105,65 +122,40 @@ We use [julienschmidt/httprouter](https://github.com/julienschmidt/httprouter) t
 Also, note that, the struct name must end with **Param**
 
 ```go
-type GetUserParam struct {
-    Username string    `valid:"alphanum"`
+func main() {
+	r := gongular.NewRouter()
+    r.GET("/param/:Username", ParamRequest)
+	r.ListenAndServe(":8000")
 }
-r := gongular.NewRouter()
-r.GET("/user/{Username}", func(param GetUserParam) (int){
-    if param.Username == "mustafa" {
-        return http.StatusOK
-    } else {
-        return http.StatusUnauthorized
-    }
-})
 ```
 
-The above code will match the URL requests `/user/mustafa` and `/user/someonelese` and return status codes accordingly.
+And the output will be:
 
-## Query Parameters
-
-Query parameters are commonly used in the HTTP Requests. It is so similar to path parameters, however the struct name must end with **Query**
-
-```go
-type CanYouDriveQuery struct {
-    Username string    `valid:"alphanum"`
-    Age      int 
-}
-r := gongular.NewRouter()
-r.GET("/canYouDrink", func(c CanYouDriveQuery) (string){
-    if c.Age < 18  {
-        return "Sorry " + c.Username, " you cannot drive"
-    } else {
-        return "Okay, you can drive"
-    }
-})
+```zsh
+➜ curl localhost:8000/param/Mustafa
+"Hi: Mustafa"
 ```
 
-## POST JSON Body
+## POST JSON Body
 
-In POST requests, you can also use the JSON body to map it as a struct. The name of the supplied input parameter must end with **Body** to do so.
-
-```go
-type UpdateMyChoicesBody struct {
-    Username  string    `valid:"alphanum"`
-    Password  string
-    Choices[] string
+```zsh
+func main() {
+	r := gongular.NewRouter()
+	r.POST("/body", BodyRequest)
+	r.ListenAndServe(":8000")
 }
-
-type UpdateMyChoicesResponse struct {
-    StatusMessage string
-    Elapsed       int
-}
-
-r := gongular.NewRouter()
-r.POST("/update/choices", func(u UpdateMyChoicesBody) (UpdateMyChoicesResponse){
-    // some business logic
-    return UpdateMyChoicesResponse{
-       StatusMessage: "Some of your choices updated.",
-       Elapsed: 50,
-    }
-})
 ```
+
+And the output will be:
+
+```zsh
+➜ curl -H "Content-Type: application/json" -X POST -d '{"Username":"Mustafa","Choices": [{"Question":"How old are you?","Answer":"25"}, {"Question":"What is your favorite color?", "Answer":"Blue"}]}' http://localhost:8000/body
+"Hi , Mustafa. How old are you?: 25; What is your favorite color?: Blue; "
+```
+
+## Validation
+
+We use govalidator. Details soon.
 
 ## Dependencies
 
