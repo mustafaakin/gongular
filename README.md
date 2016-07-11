@@ -234,7 +234,7 @@ r := gongular.NewRouter()
 r.Proivde(db)
 r.GET("/users", func(db *sqlx.DB) ([]Users, error){
     var users []Users
-    err = db.Select(&pp, "SELECT * FROM users")
+    err = db.Select(&users, "SELECT * FROM users")
     return users, err
 })
 ```
@@ -267,14 +267,18 @@ Note that, errors are used for indicating internal errors. If you supply a value
 
 ## `gongular.Context` struct
 
+gongular.Context is a wrapper for http.Request and http.ResponseWriter and contains useful utilities. 
 
+* context.Status(int): sets the status of a response if not set previously
+* context.StopChain(): used to stop the next handlers to be executed, useful in middlewares
+* context.Header(key,value): sets the headers
 
 ## Logging
 
 Debugging can be toggled with `router.DisableDebug()` and `router.EnableDebug()`. If desired, `INFO` and `DEBUG` loggers of a router can be changed as follows: 
 
 ```go
-router.DebugLog = log.New(/* valid options */) /* or custom loggers that implements log.Logger interface like logrus
+router.DebugLog = log.New(/* valid options */) /* or custom loggers that implements log.Logger interface like logrus */
 router.InfoLog = log.New(/* valid options */)
 ```
 
