@@ -87,15 +87,28 @@ Routes can have multiple handlers, called middlewares, which might be useful in 
 
 ```go
 r := gongular.NewRouter()
-g := r.Group("/admin", CheckAdminAuth)
+g1 := r.Group("/", Logger)
 {
-    users := g.Group("/users")
+    g1.GET("/", Index)
+    g1.GET("/answer", SomePath)
+    g2 := g1.Group("/admin")
     {
-        users.GET("/list", ListUsers)
-        users.POST("/delete/:user", LogDangeroursAction, DeleteUser)
+        g2.GET("/delete", Logger, Index)
     }
-    g.POST("/stopSystem", MailOthers, KillTheLights,  StopSystem)
 }
+
+r.ListenAndServe(":8000")
+```
+
+Output will be:
+
+```zsh
+➜ curl localhost:8000  # Logger, Index Called
+"Hello, world"
+➜ curl localhost:8000/answer # Logger, SomePath called
+42
+➜ curl localhost:8000/admin/delete   # Logger, Logger, Index called
+"Hello, world"
 ```
 
 ## Query Parameters
@@ -111,7 +124,7 @@ func main() {
 And the output will be:
 
 ```zsh
-➜ curl localhost:8000/param/Mustafa
+➜ curl "localhost:8000/query?Username=Mustafa&Age=25"
 "Hi: Mustafa"
 ```
 

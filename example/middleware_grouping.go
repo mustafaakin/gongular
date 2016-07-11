@@ -33,11 +33,11 @@ func main() {
 	r.ListenAndServe(":8000")
 
 	/*
-    ➜  ~ curl localhost:8000
+    ➜  ~ curl localhost:8000  # Logger, Index Called
     "Hello, world"
-    ➜  ~ curl localhost:8000/answer
+    ➜  ~ curl localhost:8000/answer # Logger, SomePath called
     42
-    ➜  ~ curl localhost:8000/admin/delete   # Logger called twice
+    ➜  ~ curl localhost:8000/admin/delete   # Logger, Logger, Index called
     "Hello, world"
 	 */
 }
