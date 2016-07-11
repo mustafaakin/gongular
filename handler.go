@@ -188,9 +188,12 @@ func (hc *handlerContext) parseQuery(r *http.Request) (*reflect.Value, string) {
 	for i := 0; i < fields; i++ {
 		field := hc.query.obj.Field(i)
 		content := r.URL.Query().Get(field.Name)
+
 		if content == "" {
+			// TODO: Figure out what to do in absence, the concern should be validator's
 			return nil, fmt.Sprintf("Required query parameter not found: %s", field.Name)
 		}
+
 		field2 := v.FieldByName(field.Name)
 		kind := field2.Kind()
 

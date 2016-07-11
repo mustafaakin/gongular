@@ -180,7 +180,46 @@ And the output will be:
 
 ## Validation
 
-We use govalidator. Details soon.
+We use govalidator. Validation can be used in Query, Param or Body type inputs.
+
+```go
+type RegisterBody struct {
+	Username string	`valid:"alphanum,required"`
+	Password string `valid:"required"`
+}
+
+func main(){
+	r := gongular.NewRouter()
+	r.POST("/register", func(b RegisterBody) string {
+		return "Saved succesfully"
+	})
+	r.ListenAndServe(":8000")
+	/*
+
+	 */
+}
+```
+
+Invalid request, password not supplied #1:
+
+```zsh
+➜ curl -H "Content-Type: application/json" -X POST -d '{"Username":"Mustafa"}' http://localhost:8000/register
+"Submitted body is not valid: Password: non zero value required;"
+```
+
+Invalid request, non alpha numeric username:
+
+```zsh
+➜ curl -H "Content-Type: application/json" -X POST -d '{"Username":"!!!Mustafa","Password": "123"}' http://localhost:8000/register
+"Submitted body is not valid: Username: !!!Mustafa does not validate as alphanum;"%
+```
+
+Valid request:
+
+```zsh
+➜ curl -H "Content-Type: application/json" -X POST -d '{"Username":"Mustafa","Password": "123"}' http://localhost:8000/register
+"Saved succesfully"
+```
 
 ## Dependencies
 
