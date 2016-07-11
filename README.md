@@ -142,7 +142,7 @@ And the output will be:
 
 ## Path Parameters
 
-We use [julienschmidt/httprouter](https://github.com/julienschmidt/httprouter) to multiplex requests and do parametric binding to requests. So the format `:VariableName, *somepath` is supported in paths. Note that, you can use `valid` struct tag to validate parameters. We use [asaskevich/govalidator](https://github.com/asaskevich/govalidator) as a validation framework. If the supplied input does not pass the validation step, `http.StatusBadRequest (400)` is returned the user with the cause.
+We use [julienschmidt/httprouter](https://github.com/julienschmidt/httprouter) to multiplex requests and do parametric binding to requests. So the format `:VariableName, *somepath` is supported in paths. Note that, you can use `valid` struct tag to validate parameters.
 
 Also, note that, the struct name must end with **Param**
 
@@ -180,7 +180,7 @@ And the output will be:
 
 ## Validation
 
-We use govalidator. Validation can be used in Query, Param or Body type inputs.
+We use [asaskevich/govalidator](https://github.com/asaskevich/govalidator) as a validation framework. If the supplied input does not pass the validation step, `http.StatusBadRequest (400)` is returned the user with the cause. Validation can be used in Query, Param or Body type inputs.
 
 ```go
 type RegisterBody struct {
@@ -194,9 +194,6 @@ func main(){
 		return "Saved succesfully"
 	})
 	r.ListenAndServe(":8000")
-	/*
-
-	 */
 }
 ```
 
@@ -268,19 +265,26 @@ r.ProvideCustom(UserSession{}, func(w http.ResponseWriter, r *http.Request) (err
 
 Note that, errors are used for indicating internal errors. If you supply a value to error, the gongular router will write 500 as a status. If you want to indicate that you could not supply a value, you have to proivde nil as second output.
 
+## `gongular.Context` struct
+
+
+
 ## Logging
 
-[Sirupsen/logrus](https://github.com/Sirupsen/logrus) is used in logging and will be more configurable in following releases.
+Debugging can be toggled with `router.DisableDebug()` and `router.EnableDebug()`. If desired, `INFO` and `DEBUG` loggers of a router can be changed as follows: 
+
+```go
+router.DebugLog = log.New(/* valid options */) /* or custom loggers that implements log.Logger interface like logrus
+router.InfoLog = log.New(/* valid options */)
+```
 
 ## TODO
 
-* Code refactoring for better readability & testability
-* Actual tests
-* Static file serving
-* Configurable logging
-* Better validation
-* Better info about routes
-* Stats about route performance (not really needed)
+gongular is relatively new, and following needs to be completed:
+
+* Unit tests
+* Integration tests
+* Benchmarks
 
 ## Contribute
 
