@@ -86,6 +86,18 @@ func (c *gongular.Context, body SomethingBody, query SomethingQuery, param Somet
 Routes can have multiple handlers, called middlewares, which might be useful in grouping the requests and doing preliminary work before some routes. For example, the following grouping and routing is valid:
 
 ```go
+func Logger(c *gongular.Context) {
+	log.Println("Printed before every request")
+}
+
+func Index() string {
+	return "Hello, world"
+}
+
+func SomePath() int {
+	return 42
+}
+
 r := gongular.NewRouter()
 g1 := r.Group("/", Logger)
 {
