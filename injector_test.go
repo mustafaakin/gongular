@@ -2,7 +2,6 @@ package gongular
 
 import (
 	"github.com/stretchr/testify/assert"
-	"net/http"
 	"reflect"
 	"testing"
 )
@@ -44,7 +43,7 @@ func TestInjector_ProvideCustom(t *testing.T) {
 		Age      int
 	}
 
-	i.ProvideCustom(&SomeInterface{}, func(w http.ResponseWriter, r *http.Request) (error, interface{}) {
+	i.ProvideCustom(&SomeInterface{}, func(c *Context) (error, interface{}) {
 		return nil, &SomeInterface{
 			Username: "bla-bla",
 			Age:      3,

@@ -277,7 +277,7 @@ func (hc *handlerContext) execute(injector *Injector, c *Context, ps httprouter.
 	for _, arg := range hc.customArgs {
 		// Check if it exists on execution-injectable values then
 		if fn, ok := injector.customProviders[arg.obj]; ok {
-			errInternal, out := fn(c.w, c.r)
+			errInternal, out := fn(c)
 			if errInternal != nil {
 				c.logger.Printf("Could not provide custom value '%s' to do an error: '%s'\n", arg.obj, errInternal)
 				return "An internal error has occured", nil

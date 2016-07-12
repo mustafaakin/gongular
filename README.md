@@ -223,20 +223,34 @@ Valid request:
 One of the thing that makes `gongular` from other frameworks is that it provides safe value injection to route handlers. It can be used to store database connections, or some other external utility that you want that to be avilable in your handler, but do not want to make it global, or just get it from some other global function that might pollute the space. Supplied dependencies are provided as-is to route handlers and they are private to supplied router, nothing is global.  
 
 ```go
-type User struct {
-    Username   string
-    Email      string
-    Age        int
-    IsActive   bool
+type DB struct {
+	Hostname string
+	Database string
 }
-db = sqlx.MustConnect("sqlite3", ":memory:")
-r := gongular.NewRouter()
-r.Proivde(db)
-r.GET("/users", func(db *sqlx.DB) ([]Users, error){
-    var users []Users
-    err = db.Select(&users, "SELECT * FROM users")
-    return users, err
-})
+
+func (d *DB) Query(sql string) string {
+	return fmt.Sprintf("Host=%s DB=%s SQL=%s", d.Hostname, d.Database,sql)
+}
+
+func main(){
+	g := gongular.NewRouter()
+	db := &DB{
+		Hostname: "server0",
+		Database: "testdb",
+	}
+	g.Provide(db)
+	g.GET("/db", func(d *DB) string {
+		return db.Query("SELECT * FROM mytable")
+	})
+	g.ListenAndServe(":8000")
+}
+```
+
+And the output will be:
+
+```zsh
+➜ curl localhost:8000/db
+"Host=server0 DB=testdb SQL=SELECT * FROM mytable"
 ```
 
 ## Custom Dependencies
@@ -244,23 +258,32 @@ r.GET("/users", func(db *sqlx.DB) ([]Users, error){
 Static dependencies are great, but they do not provide more flexibility. They are static, and supplied as-is. If you want custom logic while providing your dependency, i.e. providing username from session, you can use the following:
 
 ```go
-r := gongular.NewRouter()
-r.ProvideCustom(UserSession{}, func(w http.ResponseWriter, r *http.Request) (error, interface{}) {
-    session, err := store.Get(r, "session-name")
-    if err != nil {
-        return err, nil
-    }
-    if val, ok := session.Values["username"];ok {
-        return nil, UserSession{
-            Username: val,
-        }
-    } else {
-        w.WriteHeader(http.StatusUnauthorized)
-        w.Header().Set("Content-Type", "application/json")
-        fmt.Fprintf(w, "You are unauthorized!!!")
-        return nil, nil
-    }
-})
+type User struct {
+	Age int
+}
+
+func main(){
+	g := gongular.NewRouter()
+	g.ProvideCustom(&User{}, func(c *gongular.Context) (error, interface{}){
+		u := User{
+			Age: rand.Intn(70),
+		}
+		return nil, &u
+	})
+	g.GET("/user", func(u *User) string{
+		return fmt.Sprintf("Hey, you are %d years old", u.Age)
+	})
+	g.ListenAndServe(":8000")
+}
+```
+
+And the output will be:
+
+```zsh
+➜ curl localhost:8000/user
+"Hey, you are 41 years old"
+➜ curl localhost:8000/user
+"Hey, you are 37 years old"
 ```
 
 Note that, errors are used for indicating internal errors. If you supply a value to error, the gongular router will write 500 as a status. If you want to indicate that you could not supply a value, you have to proivde nil as second output.

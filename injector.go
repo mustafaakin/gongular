@@ -1,7 +1,6 @@
 package gongular
 
 import (
-	"net/http"
 	"reflect"
 )
 
@@ -41,4 +40,4 @@ func (inj *Injector) ProvideCustom(value interface{}, fn CustomProvideFunction) 
 
 // CustomProvideFunction is called whenever a value is needed to be provided
 // with custom logic
-type CustomProvideFunction func(w http.ResponseWriter, r *http.Request) (error, interface{})
+type CustomProvideFunction func(c *Context) (error, interface{})
