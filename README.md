@@ -42,13 +42,15 @@ And output is:
 
 When you make a request, you will see how much time passed in your handler, and bytes served and total time including JSON encoding.
 
-```
+```zsh
 ➜ curl localhost:8000/
 {
   "Message": "Hello, you are coming from: 127.0.0.1:39018",
   "Date": "2016-07-09T18:34:23.88065349+03:00"
 }
+```
 
+```zsh
 [DEBUG] 2016/07/09 18:34:23 GET   /                              <func(*gongular.Context) main.WelcomeMessage Value>   33.004µs
 [INFO ] 2016/07/09 18:34:23 GET   /                              /                                                     93.106µs  200 110
 ```
