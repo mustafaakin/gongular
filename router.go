@@ -52,6 +52,18 @@ func NewRouter() *Router {
 	return r
 }
 
+
+// NewRouterTest initiates a router object with default params
+func NewRouterTest() *Router {
+	r := NewRouter()
+	r.DebugLog.SetOutput(ioutil.Discard)
+	r.DebugLog.SetFlags(0)
+	r.InfoLog.SetOutput(ioutil.Discard)
+	r.InfoLog.SetFlags(0)
+	return r
+}
+
+
 // DisableDebug disables the debug outputs that might be too much for some people
 func (r *Router) DisableDebug() {
 	r.DebugLog.SetOutput(ioutil.Discard)
