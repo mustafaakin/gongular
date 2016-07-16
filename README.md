@@ -1,4 +1,7 @@
 ![gongular](https://raw.githubusercontent.com/mustafaakin/gongular/master/logo.png)
+
+[![Build Status](https://travis-ci.org/mustafaakin/gongular.svg?branch=master)](https://travis-ci.org/mustafaakin/gongular)
+[![Coverage Status](https://coveralls.io/repos/github/mustafaakin/gongular/badge.svg?branch=master)](https://coveralls.io/github/mustafaakin/gongular?branch=master)
 [![Go Report Card](https://goreportcard.com/badge/github.com/mustafaakin/gongular)](https://goreportcard.com/report/github.com/mustafaakin/gongular)
 [![GoDoc](https://godoc.org/github.com/mustafaakin/gongular?status.svg)](https://godoc.org/github.com/mustafaakin/gongular)
 
