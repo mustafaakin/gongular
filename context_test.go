@@ -4,6 +4,8 @@ import (
 	"testing"
 	"github.com/stretchr/testify/assert"
 	"net/http"
+	"log"
+	"io/ioutil"
 )
 
 func TestContext_Fail(t *testing.T) {
@@ -30,12 +32,19 @@ func TestContext_Request(t *testing.T) {
 	assert.Equal(t, req, c.Request())
 }
 
-func TestContext_SetBody(t *testing.T) {
+func TestContext_Status(t *testing.T) {
 	c := Context{}
+	c.Status(http.StatusTeapot)
+	assert.Equal(t, http.StatusTeapot, c.status)
+}
 
-	b := make([]byte, 30)
-	c.SetBody(b)
+func TestContext_StatusTwice(t *testing.T) {
+	c := Context{}
+	// TODO: Remove logger
+	c.logger = log.New(ioutil.Discard, "", 0)
 
-	// These unit-tests are getting ridiculous but trust me they will get better
-	assert.Equal(t, b, c.body)
+	c.Status(http.StatusTeapot)
+	assert.Equal(t, http.StatusTeapot, c.status)
+	c.Status(http.StatusInternalServerError)
+	assert.Equal(t, http.StatusTeapot, c.status)
 }

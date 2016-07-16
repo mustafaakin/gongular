@@ -13,7 +13,6 @@ type Context struct {
 	w             http.ResponseWriter
 	status        int
 	headers       map[string]string
-	body          []byte
 	bodyInterface interface{}
 	logger        *log.Logger
 	stopChain     bool
@@ -54,11 +53,6 @@ func (c *Context) Header(key, value string) {
 	c.headers[key] = value
 }
 
-// SetBody sets the body as a byte
-func (c *Context) SetBody(b []byte) {
-	c.body = b
-}
-
 // SetBodyJSON sets the given interface as to be
 func (c *Context) SetBodyJSON(v interface{}) {
 	c.bodyInterface = v
@@ -82,20 +76,12 @@ func (c *Context) finalize() int {
 		c.w.Header().Add(k, v)
 	}
 
-	// Interface body has precedence over byte body
 	if c.bodyInterface != nil {
 		c.w.Header().Set("Content-type", "application/json")
 		b, _ := json.MarshalIndent(c.bodyInterface, "", "  ")
 		bytes, err := c.w.Write(b)
 		if err != nil {
 
-		}
-		return bytes
-
-	} else if c.body != nil {
-		bytes, err := c.w.Write(c.body)
-		if err != nil {
-			// TODO: What to do with it?
 		}
 		return bytes
 	}

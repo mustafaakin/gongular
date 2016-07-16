@@ -283,7 +283,7 @@ func (hc *handlerContext) execute(injector *Injector, c *Context, ps httprouter.
 			} else if out == nil {
 				// TODO: Nil provided? Log?
 				c.StopChain()
-				return "", nil
+				return nil, nil
 			} else {
 				ins[arg.idx] = reflect.ValueOf(out)
 			}
