@@ -199,6 +199,7 @@ func (r *Router) wrapHandlers(injector *Injector, path string, fns ...interface{
 
 			if err != nil {
 				r.ErrorHandler(err, c)
+				break // Stopping the chain
 			}
 
 			// If error is nil, and user is returning error, its his problem

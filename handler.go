@@ -280,7 +280,8 @@ func (hc *handlerContext) execute(injector *Injector, c *Context, ps httprouter.
 			errInternal, out := fn(c)
 			if errInternal != nil {
 				c.logger.Printf("Could not provide custom value '%s' to do an error: '%s'\n", arg.obj, errInternal)
-				return "An internal error has occured", nil
+				c.Fail(http.StatusInternalServerError, "An internal error has occured")
+				return nil, nil
 			} else if out == nil {
 				// TODO: Nil provided? Log?
 				c.StopChain()

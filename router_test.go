@@ -3,6 +3,7 @@ package gongular
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"io"
@@ -11,8 +12,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"testing"
 	"strings"
+	"testing"
 )
 
 func resp_wrap(t *testing.T, r *Router, path, method string, reader io.Reader) (int, string) {
@@ -192,7 +193,7 @@ func TestRouter_GET_query_validate(t *testing.T) {
 
 	type TestQuery struct {
 		UserId int
-		Name   string  `valid:"alphanum"`
+		Name   string `valid:"alphanum"`
 	}
 
 	const UserId = 227
@@ -215,7 +216,6 @@ func TestRouter_GET_query_validate(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, code)
 }
-
 
 func TestRouter_POST_basic(t *testing.T) {
 	r := NewRouterTest()
@@ -253,12 +253,12 @@ func TestRouter_POST_body(t *testing.T) {
 
 	type TestBody struct {
 		Username string
-		Age int
+		Age      int
 	}
 
 	BODY := TestBody{
 		Username: "mustafa",
-		Age: 25,
+		Age:      25,
 	}
 
 	r.POST("/hello", func(b TestBody) {
@@ -274,16 +274,15 @@ func TestRouter_POST_body(t *testing.T) {
 func TestRouter_Group(t *testing.T) {
 	r := NewRouterTest()
 
-	r.GET("/", func() string{
+	r.GET("/", func() string {
 		return "index"
 	})
 
-
-	g := r.Group("/admin", func(c *Context){
+	g := r.Group("/admin", func(c *Context) {
 		assert.True(t, strings.HasPrefix(c.Request().URL.String(), "/admin/"))
 	})
 
-	g.GET("/get-page", func() string{
+	g.GET("/get-page", func() string {
 		return "get-admin-page"
 	})
 
@@ -291,19 +290,143 @@ func TestRouter_Group(t *testing.T) {
 		return 5
 	})
 
+	sg := g.Group("/sub", func(c *Context) {
+		assert.True(t, strings.HasPrefix(c.Request().URL.String(), "/admin/sub/"))
+	})
 
-	code1, content1 := get(t,r, "/")
+	sg.GET("/wow", func() string {
+		return "much request"
+	})
+
+	// Make requests and test
+
+	code1, content1 := get(t, r, "/")
 	assert.Equal(t, http.StatusOK, code1)
 	assert.Equal(t, `"index"`, content1)
 
-	code2, content2 := get(t,r, "/admin/get-page")
+	code2, content2 := get(t, r, "/admin/get-page")
 	assert.Equal(t, http.StatusOK, code2)
 	assert.Equal(t, `"get-admin-page"`, content2)
 
-	code3, _ := get(t,r, "/admin")
+	code3, _ := get(t, r, "/admin")
 	assert.Equal(t, http.StatusNotFound, code3)
 
-	code4, content4 := post(t,r, "/admin/post-page", nil)
+	code4, content4 := post(t, r, "/admin/post-page", nil)
 	assert.Equal(t, http.StatusOK, code4)
 	assert.Equal(t, `5`, content4)
+
+	code5, content5 := get(t, r, "/admin/sub/wow")
+	assert.Equal(t, http.StatusOK, code5)
+	assert.Equal(t, `"much request"`, content5)
+}
+
+func TestRouter_Error(t *testing.T) {
+	r := NewRouterTest()
+
+	err := errors.New("error occurred sorry")
+
+	r.GET("/fail", func() (string, error) {
+		return "wow-much-request", err
+	})
+
+	code, content := get(t, r, "/fail")
+
+	assert.Equal(t, http.StatusInternalServerError, code)
+	assert.NotEqual(t, `"wow-much-request"`, content)
+}
+
+func TestRouter_Provide(t *testing.T) {
+	r := NewRouterTest()
+
+	type DB struct {
+		Hostname string
+		Password string
+	}
+
+	d := &DB{
+		Hostname: "mysql-domain.com",
+		Password: "1234",
+	}
+
+	r.Provide(d)
+
+	r.GET("/provide-test", func(d2 *DB){
+		assert.Equal(t, "mysql-domain.com", d2.Hostname)
+		assert.Equal(t, "1234", d2.Password)
+		assert.Equal(t, d, d2)
+	})
+
+	code, _ := get(t,r, "/provide-test")
+	assert.Equal(t, http.StatusOK, code)
+}
+
+func TestRouter_CustomProvide(t *testing.T) {
+	r := NewRouterTest()
+
+	type DB struct {
+		Hostname string
+		Password string
+	}
+
+	r.ProvideCustom(&DB{}, func(c *Context) (error, interface{}){
+		return nil, &DB{
+			Hostname: "mysql-domain.com",
+			Password: "1234",
+		}
+	})
+
+	r.GET("/custom-provide-test", func(d2 *DB){
+		assert.Equal(t, "mysql-domain.com", d2.Hostname)
+		assert.Equal(t, "1234", d2.Password)
+	})
+
+	code, _ := get(t,r, "/custom-provide-test")
+	assert.Equal(t, http.StatusOK, code)
+}
+
+func TestRouter_CustomProvideError(t *testing.T) {
+	r := NewRouterTest()
+
+	type DB struct {
+		Hostname string
+		Password string
+	}
+
+	r.ProvideCustom(&DB{}, func(c *Context) (error, interface{}){
+		return errors.New("Cannot provide sorry"), nil
+	})
+
+	r.GET("/custom-provide-err", func(d *DB){
+		// Wow, even if we are here the d should be null
+		assert.Nil(t, d)
+
+		// We should not even be here
+		assert.NotEqual(t, 1, 1)
+	})
+
+	code, _ := get(t,r, "/custom-provide-err")
+	assert.Equal(t, http.StatusInternalServerError, code)
+}
+
+func TestRouter_Provide_Unknown(t *testing.T) {
+	r := NewRouterTest()
+
+	type DB struct {
+		Hostname string
+		Password string
+	}
+	
+	assert.Panics(t, func(){
+		r.GET("/custom-provide-err", func(d *DB){
+			// Wow, even if we are here the d should be null
+			assert.Nil(t, d)
+
+			// We should not even be here
+			assert.NotEqual(t, 1, 1)
+		})
+
+
+		code, _ := get(t,r, "/custom-provide-unknown")
+		assert.Equal(t, http.StatusInternalServerError, code)
+	})
 }
