@@ -60,7 +60,7 @@ When you make a request, you will see how much time passed in your handler, and 
 
 ## How to install 
 
-You can just go get it via `go get github.com/mustafaakin/gongular`
+You can just go get it via `go get github.com/mustafaakin/gongular`. Requires Go >= 1.6
 
 ## Handler Function Format
 
