@@ -208,7 +208,7 @@ func TestRouter_GET_query_validate(t *testing.T) {
 	q.Set("UserId", fmt.Sprintf("%d", UserId))
 	q.Set("Name", Name)
 
-	u.RawQuery = q.Encode()l
+	u.RawQuery = q.Encode()
 
 	code, _ := get(t, r, u.String())
 
