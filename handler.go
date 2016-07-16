@@ -267,8 +267,6 @@ func (hc *handlerContext) execute(injector *Injector, c *Context, ps httprouter.
 		// Check if it exists on just value dependencies first
 		if val, ok := injector.values[arg.obj]; ok {
 			ins[arg.idx] = reflect.ValueOf(val)
-		} else {
-			panic("Dont know how to inject!")
 		}
 	}
 

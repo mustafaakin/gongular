@@ -21,9 +21,6 @@ func NewInjector() *Injector {
 
 // Provide registers given value depending on its name
 func (inj *Injector) Provide(value interface{}) {
-	if inj.values == nil {
-		inj.values = make(map[reflect.Type]interface{})
-	}
 	name := reflect.TypeOf(value)
 	inj.values[name] = value
 }
@@ -31,9 +28,6 @@ func (inj *Injector) Provide(value interface{}) {
 // ProvideCustom gets the type information from value, however calls CustomProvideFunction
 // each time to provide when needed
 func (inj *Injector) ProvideCustom(value interface{}, fn CustomProvideFunction) {
-	if inj.values == nil {
-		inj.customProviders = make(map[reflect.Type]CustomProvideFunction)
-	}
 	name := reflect.TypeOf(value)
 	inj.customProviders[name] = fn
 }

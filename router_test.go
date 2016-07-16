@@ -249,8 +249,6 @@ func TestRouter_POST_try_get(t *testing.T) {
 func TestRouter_POST_body(t *testing.T) {
 	r := NewRouterTest()
 
-	const RESPONSE = "hello world 123"
-
 	type TestBody struct {
 		Username string
 		Age      int
@@ -269,6 +267,31 @@ func TestRouter_POST_body(t *testing.T) {
 	code, _ := post(t, r, "/hello", BODY)
 
 	assert.Equal(t, http.StatusOK, code)
+}
+
+func TestRouter_POST_body_fail(t *testing.T) {
+	r := NewRouterTest()
+
+	type TestBody struct {
+		Username string
+		Age      int
+	}
+
+	BODY := TestBody{
+		Username: "mustafa",
+		Age:      25,
+	}
+
+	r.POST("/hello", func(b TestBody) {
+		// Should not be here
+		assert.NotEqual(t, 1, 1)
+		assert.NotEqual(t, BODY.Username, b.Username)
+		assert.NotEqual(t, BODY.Age, b.Age)
+	})
+
+	code, _ := post(t, r, "/hello", "IN-VALIDJSON}")
+
+	assert.Equal(t, http.StatusBadRequest, code)
 }
 
 func TestRouter_Group(t *testing.T) {
@@ -415,7 +438,7 @@ func TestRouter_Provide_Unknown(t *testing.T) {
 		Hostname string
 		Password string
 	}
-	
+
 	assert.Panics(t, func(){
 		r.GET("/custom-provide-err", func(d *DB){
 			// Wow, even if we are here the d should be null
@@ -430,3 +453,4 @@ func TestRouter_Provide_Unknown(t *testing.T) {
 		assert.Equal(t, http.StatusInternalServerError, code)
 	})
 }
+
