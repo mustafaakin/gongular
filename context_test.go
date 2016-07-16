@@ -1,11 +1,12 @@
 package gongular
 
 import (
-	"testing"
-	"github.com/stretchr/testify/assert"
-	"net/http"
-	"log"
 	"io/ioutil"
+	"log"
+	"net/http"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestContext_Fail(t *testing.T) {

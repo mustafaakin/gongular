@@ -1,8 +1,9 @@
 package gongular
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewRouter(t *testing.T) {
@@ -16,4 +17,3 @@ func TestNewRouter(t *testing.T) {
 	assert.Equal(t, "", r.prefix)
 	assert.NotNil(t, r.injector)
 }
-

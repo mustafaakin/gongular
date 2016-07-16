@@ -105,13 +105,13 @@ func convertHandler(ij *Injector, fn interface{}) *handlerContext {
 			obj: out,
 		}
 
-		if t == reflect.Interface {
+		if t == reflect.Struct {
+			hc.outResponse = arg
+		} else if t == reflect.Interface {
 			// Checks if error, see: http://stackoverflow.com/questions/30688514/go-reflect-how-to-check-whether-reflect-type-is-an-error-type
 			errType := reflect.TypeOf((*error)(nil)).Elem()
 			if out.Implements(errType) {
 				hc.outErr = arg
-			} else {
-				hc.outResponse = arg
 			}
 		} else {
 			hc.outResponse = arg
@@ -127,9 +127,6 @@ func (hc *handlerContext) parseParams(ps httprouter.Params) (*reflect.Value, str
 	for i := 0; i < fields; i++ {
 		field := hc.param.obj.Field(i)
 		content := ps.ByName(field.Name)
-		if content == "" {
-			return nil, fmt.Sprintf("param %s does not exist", field.Name)
-		}
 
 		field2 := v.FieldByName(field.Name)
 		kind := field2.Kind()

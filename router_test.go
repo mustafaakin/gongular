@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"io/ioutil"
 	"log"
@@ -14,6 +13,8 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func resp_wrap(t *testing.T, r *Router, path, method string, reader io.Reader) (*httptest.ResponseRecorder, string) {
@@ -215,6 +216,49 @@ func TestRouter_GET_query_validate(t *testing.T) {
 	resp, _ := get(t, r, u.String())
 
 	assert.Equal(t, http.StatusBadRequest, resp.Code)
+}
+
+func TestRouter_GET_ResponseStruct(t *testing.T) {
+	r := NewRouterTest()
+
+	type ResponseObj struct {
+		UserId int
+		Name   string
+	}
+
+	const UserId = 227
+	const Name = "mustafa-mistik"
+
+	r.GET("/pointer", func() *ResponseObj {
+		return &ResponseObj{
+			UserId: UserId,
+			Name:   Name,
+		}
+	})
+
+	r.GET("/struct", func() ResponseObj {
+		return ResponseObj{
+			UserId: UserId,
+			Name:   Name,
+		}
+	})
+
+	expected := ResponseObj{
+		UserId: UserId,
+		Name:   Name,
+	}
+
+	r1, c1 := get(t, r, "/pointer")
+	assert.Equal(t, http.StatusOK, r1.Code)
+	m1 := ResponseObj{}
+	assert.NoError(t, json.Unmarshal([]byte(c1), &m1))
+	assert.Equal(t, expected, m1)
+
+	r2, c2 := get(t, r, "/struct")
+	assert.Equal(t, http.StatusOK, r2.Code)
+	m2 := ResponseObj{}
+	assert.NoError(t, json.Unmarshal([]byte(c2), &m2))
+	assert.Equal(t, expected, m2)
 }
 
 func TestRouter_POST_basic(t *testing.T) {
@@ -491,10 +535,9 @@ func TestRouter_GET_header(t *testing.T) {
 func TestRouter_NoPanic(t *testing.T) {
 	r := NewRouterTest()
 
-	assert.NotPanics(t, func(){
-		r.GET("/panic", func() string{
+	assert.NotPanics(t, func() {
+		r.GET("/panic", func() string {
 			panic("haydaa")
-			return "sorry"
 		})
 
 		resp, _ := get(t, r, "/panic")
