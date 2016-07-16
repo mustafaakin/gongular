@@ -39,5 +39,3 @@ func TestContext_SetBody(t *testing.T) {
 	// These unit-tests are getting ridiculous but trust me they will get better
 	assert.Equal(t, b, c.body)
 }
-
-
