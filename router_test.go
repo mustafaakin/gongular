@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
+	"strings"
 )
 
 func resp_wrap(t *testing.T, r *Router, path, method string, reader io.Reader) (int, string) {
@@ -268,4 +269,41 @@ func TestRouter_POST_body(t *testing.T) {
 	code, _ := post(t, r, "/hello", BODY)
 
 	assert.Equal(t, http.StatusOK, code)
+}
+
+func TestRouter_Group(t *testing.T) {
+	r := NewRouterTest()
+
+	r.GET("/", func() string{
+		return "index"
+	})
+
+
+	g := r.Group("/admin", func(c *Context){
+		assert.True(t, strings.HasPrefix(c.Request().URL.String(), "/admin/"))
+	})
+
+	g.GET("/get-page", func() string{
+		return "get-admin-page"
+	})
+
+	g.POST("/post-page", func() int {
+		return 5
+	})
+
+
+	code1, content1 := get(t,r, "/")
+	assert.Equal(t, http.StatusOK, code1)
+	assert.Equal(t, `"index"`, content1)
+
+	code2, content2 := get(t,r, "/admin/get-page")
+	assert.Equal(t, http.StatusOK, code2)
+	assert.Equal(t, `"get-admin-page"`, content2)
+
+	code3, _ := get(t,r, "/admin")
+	assert.Equal(t, http.StatusNotFound, code3)
+
+	code4, content4 := post(t,r, "/admin/post-page", nil)
+	assert.Equal(t, http.StatusOK, code4)
+	assert.Equal(t, `5`, content4)
 }
