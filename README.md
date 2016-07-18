@@ -314,8 +314,8 @@ router.InfoLog = log.New(/* valid options */)
 
 gongular is relatively new, and following needs to be completed:
 
-* Unit tests
-* Integration tests
+* ~~Unit tests~~
+* ~~Integration tests~~
 * Benchmarks
 
 ## Contribute
