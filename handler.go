@@ -215,9 +215,9 @@ func (hc *handlerContext) parseQuery(r *http.Request) (*reflect.Value, string) {
 	return &v, ""
 }
 
-// execute responds to an http request by using writer and request
-// returns all the possible values
-func (hc *handlerContext) execute(injector *Injector, c *Context, ps httprouter.Params) (interface{}, error) {
+// prepareInputs constructs the actual function parameters for a given handler function to be executed. Upon failure,
+// it returns nil
+func (hc *handlerContext) prepareInputs(injector *Injector, c *Context, ps httprouter.Params) []reflect.Value {
 	// Prepare inputs to be supplied to hc.fn function
 	ins := make([]reflect.Value, hc.numIn)
 
@@ -233,7 +233,7 @@ func (hc *handlerContext) execute(injector *Injector, c *Context, ps httprouter.
 			ins[hc.param.idx] = *v
 		} else {
 			c.Fail(http.StatusBadRequest, validationError)
-			return nil, nil
+			return nil
 		}
 	}
 
@@ -245,7 +245,7 @@ func (hc *handlerContext) execute(injector *Injector, c *Context, ps httprouter.
 			ins[hc.body.idx] = *v
 		} else {
 			c.Fail(http.StatusBadRequest, validationError)
-			return nil, nil
+			return nil
 		}
 	}
 
@@ -255,40 +255,46 @@ func (hc *handlerContext) execute(injector *Injector, c *Context, ps httprouter.
 			ins[hc.query.idx] = *v
 		} else {
 			c.Fail(http.StatusBadRequest, validationError)
-			return nil, nil
+			return nil
 		}
 	}
 
 	// Try to put as-is dependencies such as db connections
 	for _, arg := range hc.args {
 		// Check if it exists on just value dependencies first
-		if val, ok := injector.values[arg.obj]; ok {
-			ins[arg.idx] = reflect.ValueOf(val)
-		}
+		val := injector.values[arg.obj]
+		ins[arg.idx] = reflect.ValueOf(val)
 	}
 
 	// Try to put custom provided dependencies such as custom logic that might
 	// be required to get user info from session
 	for _, arg := range hc.customArgs {
-		// Check if it exists on execution-injectable values then
-		if fn, ok := injector.customProviders[arg.obj]; ok {
-			errInternal, out := fn(c)
-			if errInternal != nil {
-				c.logger.Printf("Could not provide custom value '%s' to do an error: '%s'\n", arg.obj, errInternal)
-				c.Fail(http.StatusInternalServerError, "An internal error has occured")
-				return nil, nil
-			} else if out == nil {
-				// TODO: Nil provided? Log?
-				c.StopChain()
-				return nil, nil
-			} else {
-				ins[arg.idx] = reflect.ValueOf(out)
-			}
+		// Check if it exists on execution-injectable values
+		fn := injector.customProviders[arg.obj]
+		errInternal, out := fn(c)
+		if errInternal != nil {
+			c.logger.Printf("Could not provide custom value '%s' to do an error: '%s'\n", arg.obj, errInternal)
+			c.Fail(http.StatusInternalServerError, "An internal error has occured")
+			return nil
+		} else if out == nil {
+			// TODO: Nil provided? Log?
+			c.StopChain()
+			return nil
 		} else {
-			panic("Don't know how to inject!")
+			ins[arg.idx] = reflect.ValueOf(out)
 		}
 	}
-	
+
+	return ins
+}
+
+// execute responds to an http request by using writer and request
+// returns all the possible values
+func (hc *handlerContext) execute(injector *Injector, c *Context, ps httprouter.Params) (interface{}, error) {
+	ins := hc.prepareInputs(injector, c, ps)
+	if ins == nil {
+		return nil, nil
+	}
 
 	// Call the function with supplied values
 	outs := hc.fn.Call(ins)
