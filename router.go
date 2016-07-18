@@ -94,23 +94,26 @@ func (r *Router) subpath(_path string, handlers []interface{}) (string, []interf
 	return resultingPath, combinedHandlers
 }
 
+func (r *Router) combineAndWrapHandlers(path, method string, handlers ...interface{}) {
+	resultingPath, combinedHandlers := r.subpath(path, handlers)
+	fn := r.wrapHandlers(r.injector, resultingPath, combinedHandlers...)
+	r.printBindingMessage(resultingPath, method, combinedHandlers...)
+
+	if method == "GET" {
+		r.router.GET(resultingPath, fn)
+	} else if method == "POST"{
+		r.router.POST(resultingPath, fn)
+	}
+}
+
 // GET registers given set of handlers to a GET request at path
 func (r *Router) GET(_path string, handlers ...interface{}) {
-	resultingPath, combinedHandlers := r.subpath(_path, handlers)
-
-	fn := r.wrapHandlers(r.injector, resultingPath, combinedHandlers...)
-	r.router.GET(resultingPath, fn)
-
-	r.printBindingMessage(resultingPath, "GET", combinedHandlers...)
+	r.combineAndWrapHandlers(_path, http.MethodGet, handlers...)
 }
 
 // POST registers given set of handlers to a POST request at path
 func (r *Router) POST(_path string, handlers ...interface{}) {
-	resultingPath, combinedHandlers := r.subpath(_path, handlers)
-
-	fn := r.wrapHandlers(r.injector, resultingPath, combinedHandlers...)
-	r.router.POST(resultingPath, fn)
-	r.printBindingMessage(resultingPath, "POST", handlers...)
+	r.combineAndWrapHandlers(_path, http.MethodPost, handlers...)
 }
 
 // Group groups a given path with additional interfaces. It is useful to avoid
@@ -126,9 +129,7 @@ func (r *Router) Group(_path string, handlers ...interface{}) *Router {
 
 	// Copy previous handlers references
 	newRouter.handlers = make([]interface{}, len(r.handlers))
-	for i, handler := range r.handlers {
-		newRouter.handlers[i] = handler
-	}
+	copy(newRouter.handlers, r.handlers)
 
 	// Append new handlers
 	newRouter.handlers = append(newRouter.handlers, handlers...)

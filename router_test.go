@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func resp_wrap(t *testing.T, r *Router, path, method string, reader io.Reader) (*httptest.ResponseRecorder, string) {
+func respWrap(t *testing.T, r *Router, path, method string, reader io.Reader) (*httptest.ResponseRecorder, string) {
 	resp := httptest.NewRecorder()
 
 	uri := path
@@ -28,27 +28,25 @@ func resp_wrap(t *testing.T, r *Router, path, method string, reader io.Reader) (
 	}
 
 	r.GetHandler().ServeHTTP(resp, req)
-	if p, err := ioutil.ReadAll(resp.Body); err != nil {
+	p, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
 		t.Fail()
 		return resp, ""
-	} else {
-		return resp, string(p)
 	}
+	return resp, string(p)
 }
 
 func get(t *testing.T, r *Router, path string) (*httptest.ResponseRecorder, string) {
-	return resp_wrap(t, r, path, "GET", nil)
+	return respWrap(t, r, path, "GET", nil)
 }
 
 func post(t *testing.T, r *Router, path string, body interface{}) (*httptest.ResponseRecorder, string) {
 	if body != nil {
 		b, err := json.Marshal(body)
 		assert.NoError(t, err)
-		return resp_wrap(t, r, path, "POST", bytes.NewBuffer(b))
-	} else {
-		return resp_wrap(t, r, path, "POST", nil)
+		return respWrap(t, r, path, "POST", bytes.NewBuffer(b))
 	}
-
+	return respWrap(t, r, path, "POST", nil)
 }
 
 func TestRouter_DisableDebug(t *testing.T) {
@@ -101,38 +99,38 @@ func TestRouter_GET_param_string(t *testing.T) {
 	r := NewRouterTest()
 
 	type TestParam struct {
-		UserId string
+		UserID string
 	}
 
-	const UserId = "304050ABCDEF"
+	const UserID = "304050ABCDEF"
 
-	r.GET("/user/:UserId", func(p TestParam) string {
-		assert.Equal(t, UserId, p.UserId)
-		return p.UserId
+	r.GET("/user/:UserID", func(p TestParam) string {
+		assert.Equal(t, UserID, p.UserID)
+		return p.UserID
 	})
 
-	p := "/user/" + UserId
+	p := "/user/" + UserID
 
 	resp, content := get(t, r, p)
 
 	assert.Equal(t, http.StatusOK, resp.Code)
-	assert.Equal(t, "\""+UserId+"\"", content)
+	assert.Equal(t, "\""+UserID+"\"", content)
 }
 
 func TestRouter_GET_param_string_validation(t *testing.T) {
 	r := NewRouterTest()
 
 	type TestParam struct {
-		UserId string `valid:"alphanum"`
+		UserID string `valid:"alphanum"`
 	}
 
-	const UserId = "!!!AAAA"
+	const UserID = "!!!AAAA"
 
-	r.GET("/user/:UserId", func(p TestParam) {
-		assert.Equal(t, UserId, p.UserId)
+	r.GET("/user/:UserID", func(p TestParam) {
+		assert.Equal(t, UserID, p.UserID)
 	})
 
-	p := "/user/" + UserId
+	p := "/user/" + UserID
 
 	resp, _ := get(t, r, p)
 	assert.Equal(t, http.StatusBadRequest, resp.Code)
@@ -142,44 +140,44 @@ func TestRouter_GET_param_int(t *testing.T) {
 	r := NewRouterTest()
 
 	type TestParam struct {
-		UserId int
+		UserID int
 	}
 
-	const UserId = 227
+	const UserID = 227
 
-	r.GET("/user/:UserId", func(p TestParam) int {
-		assert.Equal(t, UserId, p.UserId)
-		return p.UserId
+	r.GET("/user/:UserID", func(p TestParam) int {
+		assert.Equal(t, UserID, p.UserID)
+		return p.UserID
 	})
 
-	p := fmt.Sprintf("/user/%d", UserId)
+	p := fmt.Sprintf("/user/%d", UserID)
 
 	resp, content := get(t, r, p)
 
 	assert.Equal(t, http.StatusOK, resp.Code)
-	assert.Equal(t, fmt.Sprintf("%d", UserId), content)
+	assert.Equal(t, fmt.Sprintf("%d", UserID), content)
 }
 
 func TestRouter_GET_query(t *testing.T) {
 	r := NewRouterTest()
 
 	type TestQuery struct {
-		UserId int
+		UserID int
 		Name   string
 	}
 
-	const UserId = 227
+	const UserID = 227
 	const Name = "mustafa-mistik"
 
 	r.GET("/hello", func(q TestQuery) {
-		assert.Equal(t, UserId, q.UserId)
+		assert.Equal(t, UserID, q.UserID)
 		assert.Equal(t, Name, q.Name)
 	})
 
 	u, err := url.Parse("/hello")
 	assert.Nil(t, err)
 	q := u.Query()
-	q.Set("UserId", fmt.Sprintf("%d", UserId))
+	q.Set("UserID", fmt.Sprintf("%d", UserID))
 	q.Set("Name", Name)
 
 	u.RawQuery = q.Encode()
@@ -193,22 +191,22 @@ func TestRouter_GET_query_validate(t *testing.T) {
 	r := NewRouterTest()
 
 	type TestQuery struct {
-		UserId int
+		UserID int
 		Name   string `valid:"alphanum"`
 	}
 
-	const UserId = 227
+	const UserID = 227
 	const Name = "mustafa-mistik"
 
 	r.GET("/hello", func(q TestQuery) {
-		assert.Equal(t, UserId, q.UserId)
+		assert.Equal(t, UserID, q.UserID)
 		assert.Equal(t, Name, q.Name)
 	})
 
 	u, err := url.Parse("/hello")
 	assert.Nil(t, err)
 	q := u.Query()
-	q.Set("UserId", fmt.Sprintf("%d", UserId))
+	q.Set("UserID", fmt.Sprintf("%d", UserID))
 	q.Set("Name", Name)
 
 	u.RawQuery = q.Encode()
@@ -222,29 +220,29 @@ func TestRouter_GET_ResponseStruct(t *testing.T) {
 	r := NewRouterTest()
 
 	type ResponseObj struct {
-		UserId int
+		UserID int
 		Name   string
 	}
 
-	const UserId = 227
+	const UserID = 227
 	const Name = "mustafa-mistik"
 
 	r.GET("/pointer", func() *ResponseObj {
 		return &ResponseObj{
-			UserId: UserId,
+			UserID: UserID,
 			Name:   Name,
 		}
 	})
 
 	r.GET("/struct", func() ResponseObj {
 		return ResponseObj{
-			UserId: UserId,
+			UserID: UserID,
 			Name:   Name,
 		}
 	})
 
 	expected := ResponseObj{
-		UserId: UserId,
+		UserID: UserID,
 		Name:   Name,
 	}
 

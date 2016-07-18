@@ -288,6 +288,7 @@ func (hc *handlerContext) execute(injector *Injector, c *Context, ps httprouter.
 			panic("Don't know how to inject!")
 		}
 	}
+	
 
 	// Call the function with supplied values
 	outs := hc.fn.Call(ins)
