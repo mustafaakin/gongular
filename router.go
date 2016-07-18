@@ -101,7 +101,7 @@ func (r *Router) combineAndWrapHandlers(path, method string, handlers ...interfa
 
 	if method == "GET" {
 		r.router.GET(resultingPath, fn)
-	} else if method == "POST"{
+	} else if method == "POST" {
 		r.router.POST(resultingPath, fn)
 	}
 }
