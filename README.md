@@ -131,6 +131,15 @@ Output will be:
 ## Query Parameters
 
 ```go
+type MyQuery struct {
+	Username string
+	Age      int
+}
+
+func QueryRequest(q MyQuery) string{
+	return fmt.Sprintf("Hi: %s, You are %d years old", q.Username, q.Age)
+}
+
 func main() {
 	r := gongular.NewRouter()
 	r.GET("/query", QueryRequest)
@@ -142,7 +151,7 @@ And the output will be:
 
 ```zsh
 ➜ curl "localhost:8000/query?Username=Mustafa&Age=25"
-"Hi: Mustafa"
+"Hi: Mustafa, You are 25 years old"
 ```
 
 ## Path Parameters
@@ -152,9 +161,17 @@ We use [julienschmidt/httprouter](https://github.com/julienschmidt/httprouter) t
 Also, note that, the struct name must end with **Param**
 
 ```go
+type MyParam struct {
+	Username string
+}
+
+func AnotherRequest(u MyParam) string{
+	return "Hi: " + u.Username
+}
+
 func main() {
 	r := gongular.NewRouter()
-    r.GET("/param/:Username", ParamRequest)
+    	r.GET("/param/:Username", AnotherRequest)
 	r.ListenAndServe(":8000")
 }
 ```
@@ -169,9 +186,25 @@ And the output will be:
 ## POST JSON Body
 
 ```go
+type MyLongBody struct {
+	Username string
+	Choices []struct {
+		Question string
+		Answer   string
+	}
+}
+
+func ParseThatBodyPlease(b MyLongBody) string {
+	str := "Hi " + b.Username + ". "
+	for _, choice := b.Choices {
+		str + = choice.Question + ":" + choice.Answer + "; " 
+	}
+	return str
+}
+
 func main() {
 	r := gongular.NewRouter()
-	r.POST("/body", BodyRequest)
+	r.POST("/body", ParseThatBodyPlease)
 	r.ListenAndServe(":8000")
 }
 ```
