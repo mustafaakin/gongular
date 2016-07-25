@@ -637,3 +637,52 @@ func TestRouter_ServeFiles(t *testing.T) {
 	assert.NotNil(t, bytes)
 	assert.Equal(t, actualBytes, bytes)
 }
+
+func TestRouter_Subgroup_Error(t *testing.T){
+	r := NewRouterTest()
+
+	r.GET("/", func() string {
+		return "hi"
+	})
+
+	g1 := r.Group("/g1")
+	{
+		g1.GET("/path1", func() (error,string){
+			return errors.New("haydaa"), "anaaa"
+		})
+	}
+
+	resp, body := get(t, r, "/g1/path1")
+
+	assert.Equal(t, http.StatusInternalServerError, resp.Code)
+
+	var m map[string]string
+	err := json.Unmarshal([]byte(body), &m)
+	assert.NoError(t, err)
+	assert.Equal(t, "haydaa", m["error"])
+}
+
+func TestRouter_Subgroup_Injection(t *testing.T){
+	r := NewRouterTest()
+	type DB struct {
+		Hostname string
+	}
+
+	d1 := &DB{Hostname: "example.com"}
+	r.Provide(d1)
+
+	r.GET("/", func() string {
+		return "hi"
+	})
+
+	g1 := r.Group("/g1")
+	{
+		g1.GET("/path1", func(d2 *DB) (string){
+			return d2.Hostname
+		})
+	}
+
+	resp, body := get(t, r, "/g1/path1")
+	assert.Equal(t, http.StatusOK, resp.Code)
+	assert.Equal(t, fmt.Sprintf(`"%s"`, d1.Hostname), body)
+}
