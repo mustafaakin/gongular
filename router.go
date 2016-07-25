@@ -31,7 +31,7 @@ var DefaultPanicHandle = func(v interface{}, c *Context) {
 	c.SetBody(map[string]interface{}{
 		"panic": v,
 	})
-	c.finalize()
+	c.Finalize()
 }
 
 // Router holds information about overall router and inner objects such as
@@ -240,7 +240,7 @@ func (r *Router) wrapHandlers(injector *Injector, path string, fns ...interface{
 		}
 
 		// Finally write the request to client
-		bytes := c.finalize()
+		bytes := c.Finalize()
 		r.InfoLog.Printf("%-5s %-30s %-30s %10s %4d %d\n", req.Method, req.URL.Path, path, time.Since(startTime).String(), c.status, bytes)
 	}
 

@@ -72,7 +72,7 @@ func (c *Context) Fail(status int, msg interface{}) {
 }
 
 // finalize writes HTTP status code, headers and the body.
-func (c *Context) finalize() int {
+func (c *Context) Finalize() int {
 	if c.status == 0 {
 		c.status = http.StatusOK
 	}

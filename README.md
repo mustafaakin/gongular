@@ -78,11 +78,27 @@ Allowed **output types**:
 * `error`  : An internal error that displays an error message to request and logs details in console
 * `any`    : Renders the given value as a JSON to user
 
-So, the following is completly valid, you can use any number of inputs or outputs. 
+So, the following is completely valid, you can use any number of inputs or outputs. 
 
 ```go
 func (c *gongular.Context, body SomethingBody, query SomethingQuery, param SomethingParam) (error, SomethingOutput){
     
+}
+```
+
+The following is also valid, which does not take or return anything: 
+
+```go
+func() {
+
+}
+```
+
+You can use the combinations as you might need:
+
+```go
+func(c *gongular.Context, s SometingQuery, p SomethingParam) SomeResponse {
+
 }
 ```
 
@@ -218,7 +234,7 @@ And the output will be:
 
 ## Validation
 
-We use [asaskevich/govalidator](https://github.com/asaskevich/govalidator) as a validation framework. If the supplied input does not pass the validation step, `http.StatusBadRequest (400)` is returned the user with the cause. Validation can be used in Query, Param or Body type inputs.
+We use [asaskevich/govalidator](https://github.com/asaskevich/govalidator) as a validation framework. If the supplied input does not pass the validation step, `http.StatusBadRequest (400)` is returned the user with the cause. Validation can be used in *Query*, *Param* or *Body* type inputs.
 
 ```go
 type RegisterBody struct {
@@ -277,8 +293,8 @@ func main(){
 		Database: "testdb",
 	}
 	g.Provide(db)
-	g.GET("/db", func(d *DB) string {
-		return db.Query("SELECT * FROM mytable")
+	g.GET("/db", func(d2 *DB) string {
+		return d2.Query("SELECT * FROM mytable")
 	})
 	g.ListenAndServe(":8000")
 }
@@ -330,9 +346,10 @@ Note that, errors are used for indicating internal errors. If you supply a value
 
 gongular.Context is a wrapper for http.Request and http.ResponseWriter and contains useful utilities. 
 
-* `context.Status(int)`: sets the status of a response if not set previously
-* `context.StopChain()`: used to stop the next handlers to be executed, useful in middlewares
-* `context.Header(key,value)`: sets the HTTP Header (key) to value 
+* `context.Status(int)`: Sets the status of a response if not set previously
+* `context.StopChain()`: Used to stop the next handlers to be executed, useful in middlewares
+* `context.Header(key,value)`: Sets the HTTP Header (key) to value
+* `context.Finalize()`: Used to write the response to client, normally should not be used other than in PanicHandler since gongular takes care of the response.
 
 ## Logging
 
@@ -342,6 +359,36 @@ Debugging can be toggled with `router.DisableDebug()` and `router.EnableDebug()`
 router.DebugLog = log.New(/* valid options */) /* or custom loggers that implements log.Logger interface like logrus */
 router.InfoLog = log.New(/* valid options */)
 ```
+
+## Custom Error and Panic Handling
+
+If your HandlerFunction returns a non-nil error, the other response is discarded and an error handler is executed (same for panics). Default errors and panics handles writes the causes to response. However, this might not be the thing you want all the time, some errors are better not to be shown to users. To change default error handlers, you can use the following:
+
+```
+r := gongular.NewRouter()
+r.ErrorHandler = func(err error, c *gongular.Context){  
+    c.StopChain()
+    c.MustStatus(http.StatusInternalServerError)
+    c.SetBody(map[string]string{
+        "error": err.Error(),
+    })
+}
+
+r.PanicHandler = func(v interface{}, c *Context) {
+    c.StopChain()
+    c.MustStatus(http.StatusInternalServerError)
+    c.SetBody(map[string]interface{}{
+        "panic": v,
+    })
+    // Note that you have to call context.Finalize method to write 
+    // the response since panic causes interuption to regular 
+    // gongular flow.
+    c.Finalize()
+}
+
+r.GET("/", Index)
+```
+
 
 ## TODO
 
