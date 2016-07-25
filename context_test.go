@@ -14,7 +14,7 @@ func TestContext_Fail(t *testing.T) {
 	c.Fail(http.StatusBadRequest, "hello world")
 
 	assert.Equal(t, c.status, http.StatusBadRequest)
-	assert.Equal(t, c.bodyInterface, "hello world")
+	assert.Equal(t, c.body, "hello world")
 }
 
 func TestContext_Header(t *testing.T) {

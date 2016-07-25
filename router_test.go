@@ -17,6 +17,25 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func respBytes(t *testing.T, r *Router, path, method string) (*httptest.ResponseRecorder, []byte) {
+	resp := httptest.NewRecorder()
+
+	uri := path
+
+	req, err := http.NewRequest(method, uri, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	r.GetHandler().ServeHTTP(resp, req)
+	p, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fail()
+		return resp, nil
+	}
+	return resp, p
+}
+
 func respWrap(t *testing.T, r *Router, path, method string, reader io.Reader) (*httptest.ResponseRecorder, string) {
 	resp := httptest.NewRecorder()
 
@@ -526,8 +545,7 @@ func TestRouter_GET_header(t *testing.T) {
 
 	resp, _ := get(t, r, "/header")
 	assert.Equal(t, http.StatusOK, resp.Code)
-	assert.Equal(t, resp.Header().Get("abc"), "123")
-	assert.Equal(t, resp.Header().Get("def"), "456")
+	assert.Equal(t, "456", resp.Header().Get("def"))
 }
 
 func TestRouter_NoPanic(t *testing.T) {
@@ -535,10 +553,136 @@ func TestRouter_NoPanic(t *testing.T) {
 
 	assert.NotPanics(t, func() {
 		r.GET("/panic", func() string {
-			panic("haydaa")
+			panic("haydaa12")
 		})
 
-		resp, _ := get(t, r, "/panic")
+		resp, body := get(t, r, "/panic")
 		assert.Equal(t, http.StatusInternalServerError, resp.Code)
+		assert.True(t, strings.Contains(body, "haydaa12"))
 	})
+}
+
+func TestRouter_Error_NoError(t *testing.T) {
+	r := NewRouterTest()
+
+	r.GET("/err", func() (error, string) {
+		return nil, "Response will be that"
+	})
+
+	resp, body := get(t, r, "/err")
+	assert.Equal(t, http.StatusOK, resp.Code)
+	assert.Equal(t, `"Response will be that"`, body)
+}
+
+func TestRouter_Error_Existence(t *testing.T) {
+	r := NewRouterTest()
+
+	r.GET("/err", func() (error, string) {
+		return errors.New("WHAT HAVE YOU DONE"), "Response will not be that"
+	})
+
+	resp, body := get(t, r, "/err")
+
+	assert.Equal(t, http.StatusInternalServerError, resp.Code)
+	assert.NotEqual(t, `"Response will not be that"`, body)
+	var m map[string]string
+	err := json.Unmarshal([]byte(body), &m)
+	assert.NoError(t, err)
+	assert.Equal(t, "WHAT HAVE YOU DONE", m["error"])
+}
+
+func TestRouter_ByteResponse(t *testing.T) {
+	r := NewRouterTest()
+
+	bytes_actual := make([]byte, 4)
+	bytes_actual[0] = 0x22
+	bytes_actual[1] = 0x7
+	bytes_actual[2] = 0x20
+	bytes_actual[3] = 0x10
+
+	r.GET("/bytes", func() []byte {
+		return bytes_actual
+	})
+
+	resp, bytes := respBytes(t, r, "/bytes", http.MethodGet)
+
+	assert.Equal(t, http.StatusOK, resp.Code)
+	assert.Len(t, bytes, 4)
+
+	for i, b := range bytes {
+		assert.Equal(t, bytes_actual[i], b)
+	}
+}
+
+func TestRouter_ServeFiles(t *testing.T) {
+	r := NewRouterTest()
+
+	r.GET("/", func() string {
+		return "index"
+	})
+	r.Static("/assets", "./")
+
+	// Ensure other routes works well with static as well
+	resp, body := get(t, r, "/")
+	assert.Equal(t, http.StatusOK, resp.Code)
+	assert.Equal(t, `"index"`, body)
+
+	// Read the actual file
+	actualBytes, err := ioutil.ReadFile(".travis.yml")
+	assert.NoError(t, err)
+	assert.NotNil(t, actualBytes)
+
+	resp, bytes := respBytes(t, r, "/assets/.travis.yml", http.MethodGet)
+	assert.Equal(t, http.StatusOK, resp.Code)
+	assert.NotNil(t, bytes)
+	assert.Equal(t, actualBytes, bytes)
+}
+
+func TestRouter_Subgroup_Error(t *testing.T){
+	r := NewRouterTest()
+
+	r.GET("/", func() string {
+		return "hi"
+	})
+
+	g1 := r.Group("/g1")
+	{
+		g1.GET("/path1", func() (error,string){
+			return errors.New("haydaa"), "anaaa"
+		})
+	}
+
+	resp, body := get(t, r, "/g1/path1")
+
+	assert.Equal(t, http.StatusInternalServerError, resp.Code)
+
+	var m map[string]string
+	err := json.Unmarshal([]byte(body), &m)
+	assert.NoError(t, err)
+	assert.Equal(t, "haydaa", m["error"])
+}
+
+func TestRouter_Subgroup_Injection(t *testing.T){
+	r := NewRouterTest()
+	type DB struct {
+		Hostname string
+	}
+
+	d1 := &DB{Hostname: "example.com"}
+	r.Provide(d1)
+
+	r.GET("/", func() string {
+		return "hi"
+	})
+
+	g1 := r.Group("/g1")
+	{
+		g1.GET("/path1", func(d2 *DB) (string){
+			return d2.Hostname
+		})
+	}
+
+	resp, body := get(t, r, "/g1/path1")
+	assert.Equal(t, http.StatusOK, resp.Code)
+	assert.Equal(t, fmt.Sprintf(`"%s"`, d1.Hostname), body)
 }

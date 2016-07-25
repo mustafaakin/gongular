@@ -5,7 +5,6 @@ import (
 	"path"
 	"reflect"
 
-	"errors"
 	"github.com/julienschmidt/httprouter"
 	"io/ioutil"
 	"log"
@@ -15,14 +14,24 @@ import (
 
 // ErrorHandle is the function signature that must be implemented to provide a custom Error Handler
 type ErrorHandle func(e error, c *Context)
+type PanicHandle func(v interface{}, c *Context)
 
 // DefaultErrorHandle writes 500 and displays error to user.
 var DefaultErrorHandle = func(err error, c *Context) {
 	c.StopChain()
-	c.Status(http.StatusInternalServerError)
-	c.SetBodyJSON(map[string]string{
+	c.MustStatus(http.StatusInternalServerError)
+	c.SetBody(map[string]string{
 		"error": err.Error(),
 	})
+}
+
+var DefaultPanicHandle = func(v interface{}, c *Context) {
+	c.StopChain()
+	c.MustStatus(http.StatusInternalServerError)
+	c.SetBody(map[string]interface{}{
+		"panic": v,
+	})
+	c.finalize()
 }
 
 // Router holds information about overall router and inner objects such as
@@ -34,7 +43,7 @@ type Router struct {
 	handlers     []interface{}
 	InfoLog      *log.Logger
 	DebugLog     *log.Logger
-	ErrorHandler ErrorHandle
+	errorHandler ErrorHandle
 }
 
 // NewRouter initiates a router object with default params
@@ -46,8 +55,10 @@ func NewRouter() *Router {
 		handlers:     make([]interface{}, 0),
 		InfoLog:      log.New(os.Stdout, "[INFO ] ", log.LstdFlags),
 		DebugLog:     log.New(os.Stdout, "[DEBUG] ", log.LstdFlags),
-		ErrorHandler: DefaultErrorHandle,
+		errorHandler: DefaultErrorHandle,
 	}
+
+	r.SetPanicHandler(DefaultPanicHandle)
 
 	return r
 }
@@ -60,6 +71,14 @@ func NewRouterTest() *Router {
 	r.InfoLog.SetOutput(ioutil.Discard)
 	r.InfoLog.SetFlags(0)
 	return r
+}
+
+//
+func (r *Router) SetPanicHandler(fn PanicHandle) {
+	r.router.PanicHandler = func(w http.ResponseWriter, req *http.Request, v interface{}) {
+		c := ContextFromRequest(w, req, r.InfoLog)
+		fn(v , c)
+	}
 }
 
 // DisableDebug disables the debug outputs that might be too much for some people
@@ -120,11 +139,12 @@ func (r *Router) POST(_path string, handlers ...interface{}) {
 // repetitions while defining many paths
 func (r *Router) Group(_path string, handlers ...interface{}) *Router {
 	newRouter := &Router{
-		router:   r.router,
-		injector: r.injector,
-		prefix:   path.Join(r.prefix, _path),
-		InfoLog:  r.InfoLog,
-		DebugLog: r.DebugLog,
+		router:       r.router,
+		injector:     r.injector,
+		prefix:       path.Join(r.prefix, _path),
+		InfoLog:      r.InfoLog,
+		DebugLog:     r.DebugLog,
+		errorHandler: r.errorHandler,
 	}
 
 	// Copy previous handlers references
@@ -170,41 +190,43 @@ func (r *Router) wrapHandlers(injector *Injector, path string, fns ...interface{
 	fn := func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		startTime := time.Now()
 
-		// TODO: Eliminate this with using custom error handler of httprouter
-		defer func() {
-			rec := recover()
-			if rec != nil {
-				var err error
-				switch t := rec.(type) {
-				case string:
-					err = errors.New(t)
-				case error:
-					err = t
-				default:
-					err = errors.New("Unknown error")
-				}
-
-				r.InfoLog.Println("An error occured while serving request: " + err.Error())
-				http.Error(w, "An internal error has occured.", http.StatusInternalServerError)
-			}
-		}()
-
 		// Create a context that will be used among multiple headers
 		c := ContextFromRequest(w, req, r.InfoLog)
+
+		// TODO: Eliminate this with using custom error handler of httprouter
+		/*
+			defer func() {
+				rec := recover()
+				if rec != nil {
+					var err error
+					switch t := rec.(type) {
+					case string:
+						err = errors.New(t)
+					case error:
+						err = t
+					default:
+						err = errors.New("Unknown error")
+					}
+
+					r.InfoLog.Println("A panic occured while serving request: " + err.Error())
+					r.ErrorHandler(err, c)
+				}
+			}()
+		*/
 
 		for _, hc := range hcs {
 			handlerStartTime := time.Now()
 			res, err := hc.execute(injector, c, ps)
 
 			if err != nil {
-				r.ErrorHandler(err, c)
+				r.errorHandler(err, c)
 				break // Stopping the chain
 			}
 
 			// If error is nil, and user is returning error, its his problem
 			if hc.outResponse != nil {
 				if res != nil {
-					c.SetBodyJSON(res)
+					c.SetBody(res)
 				}
 				// TODO: Else what?
 			}
