@@ -364,7 +364,7 @@ router.InfoLog = log.New(/* valid options */)
 
 If your HandlerFunction returns a non-nil error, the other response is discarded and an error handler is executed (same for panics). Default errors and panics handles writes the causes to response. However, this might not be the thing you want all the time, some errors are better not to be shown to users. To change default error handlers, you can use the following:
 
-```
+```go
 r := gongular.NewRouter()
 r.ErrorHandler = func(err error, c *gongular.Context){  
     c.StopChain()
