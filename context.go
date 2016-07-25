@@ -13,7 +13,7 @@ type Context struct {
 	w             http.ResponseWriter
 	status        int
 	headers       map[string]string
-	bodyInterface interface{}
+	body interface{}
 	logger        *log.Logger
 	stopChain     bool
 }
@@ -33,7 +33,7 @@ func (c *Context) Request() *http.Request {
 	return c.r
 }
 
-// Status sets the resposne code for a request. It generates a warning if it has been tried to set multiple times.
+// Status sets the response code for a request. It generates a warning if it has been tried to set multiple times.
 func (c *Context) Status(status int) {
 	// Meaning no status written before
 	if c.status == 0 {
@@ -42,6 +42,12 @@ func (c *Context) Status(status int) {
 		c.logger.Printf("Tried to set request status '%d' but it was previously set to '%d'\n", status, c.status)
 	}
 }
+
+// MustStatus overrides the status
+func(c *Context) MustStatus(status int){
+	c.status = status
+}
+
 
 // StopChain marks the context as chain is going to be stopped, meaning no other handlers will be executed.
 func (c *Context) StopChain() {
@@ -53,16 +59,16 @@ func (c *Context) Header(key, value string) {
 	c.headers[key] = value
 }
 
-// SetBodyJSON sets the given interface as to be
-func (c *Context) SetBodyJSON(v interface{}) {
-	c.bodyInterface = v
+// SetBody sets the given interface which will be written
+func (c *Context) SetBody(v interface{}) {
+	c.body = v
 }
 
 // Fail stops the chain with a status code and an object
 func (c *Context) Fail(status int, msg interface{}) {
 	c.StopChain()
 	c.Status(status)
-	c.SetBodyJSON(msg)
+	c.SetBody(msg)
 }
 
 // finalize writes HTTP status code, headers and the body.
@@ -76,14 +82,18 @@ func (c *Context) finalize() int {
 		c.w.Header().Add(k, v)
 	}
 
-	if c.bodyInterface != nil {
-		c.w.Header().Set("Content-type", "application/json")
-		b, _ := json.MarshalIndent(c.bodyInterface, "", "  ")
-		bytes, err := c.w.Write(b)
-		if err != nil {
-
+	if c.body != nil {
+		if v, ok := c.body.([]byte); ok {
+			c.w.Write(v)
+		} else {
+			c.w.Header().Set("Content-type", "application/json")
+			b, _ := json.MarshalIndent(c.body, "", "  ")
+			bytes, err := c.w.Write(b)
+			if err != nil {
+				// TODO: Handle it properly
+			}
+			return bytes
 		}
-		return bytes
 	}
 	return 0
 }
