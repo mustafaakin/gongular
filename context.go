@@ -9,13 +9,13 @@ import (
 // Context is an object that is alive during an HTTP Request. It holds useful information about a request and allows
 // the gongular to hold the information, then serialize it to the client whenever all handlers are finished.
 type Context struct {
-	r             *http.Request
-	w             http.ResponseWriter
-	status        int
-	headers       map[string]string
-	body interface{}
-	logger        *log.Logger
-	stopChain     bool
+	r         *http.Request
+	w         http.ResponseWriter
+	status    int
+	headers   map[string]string
+	body      interface{}
+	logger    *log.Logger
+	stopChain bool
 }
 
 // ContextFromRequest creates a new Context object from a valid  HTTP Request.
@@ -44,10 +44,9 @@ func (c *Context) Status(status int) {
 }
 
 // MustStatus overrides the status
-func(c *Context) MustStatus(status int){
+func (c *Context) MustStatus(status int) {
 	c.status = status
 }
-
 
 // StopChain marks the context as chain is going to be stopped, meaning no other handlers will be executed.
 func (c *Context) StopChain() {
@@ -71,22 +70,24 @@ func (c *Context) Fail(status int, msg interface{}) {
 	c.SetBody(msg)
 }
 
-// finalize writes HTTP status code, headers and the body.
+// Finalize writes HTTP status code, headers and the body.
 func (c *Context) Finalize() int {
 	if c.status == 0 {
 		c.status = http.StatusOK
 	}
 
-	c.w.WriteHeader(c.status)
 	for k, v := range c.headers {
-		c.w.Header().Add(k, v)
+		c.w.Header().Set(k, v)
 	}
 
 	if c.body != nil {
 		if v, ok := c.body.([]byte); ok {
+			c.w.WriteHeader(c.status)
 			c.w.Write(v)
 		} else {
 			c.w.Header().Set("Content-type", "application/json")
+			c.w.WriteHeader(c.status)
+
 			b, _ := json.MarshalIndent(c.body, "", "  ")
 			bytes, err := c.w.Write(b)
 			if err != nil {
@@ -94,6 +95,8 @@ func (c *Context) Finalize() int {
 			}
 			return bytes
 		}
+	} else {
+		c.w.WriteHeader(c.status)
 	}
 	return 0
 }
