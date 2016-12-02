@@ -5,11 +5,12 @@ import (
 	"path"
 	"reflect"
 
-	"github.com/julienschmidt/httprouter"
 	"io/ioutil"
 	"log"
 	"os"
 	"time"
+
+	"github.com/julienschmidt/httprouter"
 )
 
 // ErrorHandle is the function signature that must be implemented to provide a custom Error Handler
@@ -77,7 +78,7 @@ func NewRouterTest() *Router {
 func (r *Router) SetPanicHandler(fn PanicHandle) {
 	r.router.PanicHandler = func(w http.ResponseWriter, req *http.Request, v interface{}) {
 		c := ContextFromRequest(w, req, r.InfoLog)
-		fn(v , c)
+		fn(v, c)
 	}
 }
 
@@ -223,17 +224,17 @@ func (r *Router) wrapHandlers(injector *Injector, path string, fns ...interface{
 				break // Stopping the chain
 			}
 
+			// We stop chain if it is required
+			if c.stopChain {
+				break
+			}
+
 			// If error is nil, and user is returning error, its his problem
 			if hc.outResponse != nil {
 				if res != nil {
 					c.SetBody(res)
 				}
 				// TODO: Else what?
-			}
-
-			// We stop chain if it is required
-			if c.stopChain {
-				break
 			}
 
 			r.DebugLog.Printf("%-5s %-30s %-30s %10s\n", req.Method, req.URL.Path, hc.fn.String(), time.Since(handlerStartTime).String())
