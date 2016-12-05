@@ -7,6 +7,8 @@
 
 gongular is an HTTP Server Framework for developing APIs easily. It is like Gin Gonic, but it features Angular-like (or Spring like) dependency injection and better input handling. Most of the time, user input must be transformed into a structured data then it must be validated. It takes too much time and is a repetitive work, gongular aims to reduce that complexity by providing request-input mapping with tag based validation.
 
+** Note: ** gongular is an opinionated framework and it heavily relies on reflection to achieve these functionality. While there are tests to ensure it works flawlessly, I am open to contributions and opinions on how to make it better.
+
 ## Features
 
 * Automatic Query, POST Body, URL Param binding to structs with easy validation
