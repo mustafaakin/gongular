@@ -99,7 +99,7 @@ func() {
 You can use the combinations as you might need:
 
 ```go
-func(c *gongular.Context, s SometingQuery, p SomethingParam) SomeResponse {
+func(c *gongular.Context, s SomethingQuery, p SomethingParam) SomeResponse {
 
 }
 ```
