@@ -82,6 +82,10 @@ func (r *Router) SetPanicHandler(fn PanicHandle) {
 	}
 }
 
+func (r *Router) SetErrorHandler(fn ErrorHandle) {
+	r.errorHandler = fn
+}
+
 // DisableDebug disables the debug outputs that might be too much for some people
 func (r *Router) DisableDebug() {
 	r.DebugLog.SetOutput(ioutil.Discard)
