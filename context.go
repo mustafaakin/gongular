@@ -4,6 +4,10 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+
+	"reflect"
+
+	"github.com/julienschmidt/httprouter"
 )
 
 // Context is an object that is alive during an HTTP Request. It holds useful information about a request and allows
@@ -16,16 +20,28 @@ type Context struct {
 	body      interface{}
 	logger    *log.Logger
 	stopChain bool
+	params    httprouter.Params
+	path      string
+
+	injectCache map[reflect.Type]map[string]interface{}
 }
 
 // ContextFromRequest creates a new Context object from a valid  HTTP Request.
-func ContextFromRequest(w http.ResponseWriter, r *http.Request, logger *log.Logger) *Context {
+func contextFromRequest(path string, w http.ResponseWriter, r *http.Request, params httprouter.Params, logger *log.Logger) *Context {
 	return &Context{
-		r:       r,
-		w:       w,
-		headers: make(map[string]string),
-		logger:  logger,
+		path:        path,
+		r:           r,
+		w:           w,
+		headers:     make(map[string]string),
+		logger:      logger,
+		params:      params,
+		injectCache: make(map[reflect.Type]map[string]interface{}),
 	}
+}
+
+// Params returns the URL parameters of the request
+func (c *Context) Params() httprouter.Params {
+	return c.params
 }
 
 // Request returns the request object so that it can be used in middlewares or handlers.
@@ -41,6 +57,11 @@ func (c *Context) Status(status int) {
 	} else {
 		c.logger.Printf("Tried to set request status '%d' but it was previously set to '%d'\n", status, c.status)
 	}
+}
+
+// Logger returns the underlying logger for that specific context
+func (c *Context) Logger() *log.Logger {
+	return c.logger
 }
 
 // MustStatus overrides the status
@@ -83,20 +104,45 @@ func (c *Context) Finalize() int {
 	if c.body != nil {
 		if v, ok := c.body.([]byte); ok {
 			c.w.WriteHeader(c.status)
-			c.w.Write(v)
-		} else {
-			c.w.Header().Set("Content-type", "application/json")
-			c.w.WriteHeader(c.status)
-
-			b, _ := json.MarshalIndent(c.body, "", "  ")
-			bytes, err := c.w.Write(b)
+			bytes, err := c.w.Write(v)
 			if err != nil {
-				// TODO: Handle it properly
+				c.logger.Println("Could not write the response", err)
 			}
 			return bytes
 		}
-	} else {
+
+		b, err := json.MarshalIndent(c.body, "", "  ")
+		if err != nil {
+			c.logger.Println("Could not serialize the response", err)
+			return -1
+		}
+
+		c.w.Header().Set("Content-type", "application/json")
 		c.w.WriteHeader(c.status)
+
+		bytes, err := c.w.Write(b)
+		if err != nil {
+			c.logger.Println(err)
+		}
+		return bytes
 	}
+
+	c.w.WriteHeader(c.status)
 	return 0
+}
+
+func (c *Context) getCachedInjection(tip reflect.Type, key string) (interface{}, bool) {
+	if m, ok := c.injectCache[tip]; ok {
+		val, ok2 := m[key]
+		return val, ok2
+	}
+	return nil, false
+}
+
+func (c *Context) putCachedInjection(tip reflect.Type, key string, val interface{}) {
+	if _, ok := c.injectCache[tip]; !ok {
+		c.injectCache[tip] = make(map[string]interface{})
+	}
+
+	c.injectCache[tip][key] = val
 }

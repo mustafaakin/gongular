@@ -1,159 +1,65 @@
 package gongular
 
 import (
-	"net/http"
-	"path"
-	"reflect"
-
-	"io/ioutil"
+	"bytes"
 	"log"
-	"os"
+	"net/http"
+
+	"path"
+
 	"time"
 
 	"github.com/julienschmidt/httprouter"
 )
 
-// ErrorHandle is the function signature that must be implemented to provide a custom Error Handler
-type ErrorHandle func(e error, c *Context)
-type PanicHandle func(v interface{}, c *Context)
-
-// DefaultErrorHandle writes 500 and displays error to user.
-var DefaultErrorHandle = func(err error, c *Context) {
-	c.StopChain()
-	c.MustStatus(http.StatusInternalServerError)
-	c.SetBody(map[string]string{
-		"error": err.Error(),
-	})
-}
-
-var DefaultPanicHandle = func(v interface{}, c *Context) {
-	c.StopChain()
-	c.MustStatus(http.StatusInternalServerError)
-	c.SetBody(map[string]interface{}{
-		"panic": v,
-	})
-	c.Finalize()
-}
-
-// Router holds information about overall router and inner objects such as
-// prefix and additional handlers
+// Router holds the required states and does the mapping of requests
 type Router struct {
-	router       *httprouter.Router
-	injector     *Injector
-	prefix       string
-	handlers     []interface{}
-	InfoLog      *log.Logger
-	DebugLog     *log.Logger
-	errorHandler ErrorHandle
+	engine *Engine
+
+	prefix   string
+	handlers []RequestHandler
 }
 
-// NewRouter initiates a router object with default params
-func NewRouter() *Router {
-	r := &Router{
-		router:       httprouter.New(),
-		injector:     NewInjector(),
-		prefix:       "",
-		handlers:     make([]interface{}, 0),
-		InfoLog:      log.New(os.Stdout, "[INFO ] ", log.LstdFlags),
-		DebugLog:     log.New(os.Stdout, "[DEBUG] ", log.LstdFlags),
-		errorHandler: DefaultErrorHandle,
+// NewRouter creates a new gongular2 Router
+func newRouter(e *Engine) *Router {
+	r := Router{
+		engine:   e,
+		prefix:   "",
+		handlers: make([]RequestHandler, 0),
 	}
-
-	r.SetPanicHandler(DefaultPanicHandle)
-
-	return r
+	return &r
 }
 
-// NewRouterTest initiates a router object with default params
-func NewRouterTest() *Router {
-	r := NewRouter()
-	r.DebugLog.SetOutput(ioutil.Discard)
-	r.DebugLog.SetFlags(0)
-	r.InfoLog.SetOutput(ioutil.Discard)
-	r.InfoLog.SetFlags(0)
-	return r
+// GET registers the given handlers at the path for a GET request
+func (r *Router) GET(path string, handlers ...RequestHandler) {
+	r.combineAndWrapHandlers(path, http.MethodGet, handlers)
 }
 
-//
-func (r *Router) SetPanicHandler(fn PanicHandle) {
-	r.router.PanicHandler = func(w http.ResponseWriter, req *http.Request, v interface{}) {
-		c := ContextFromRequest(w, req, r.InfoLog)
-		fn(v, c)
-	}
+// POST registers the given handlers at the path for a POST request
+func (r *Router) POST(path string, handlers ...RequestHandler) {
+	r.combineAndWrapHandlers(path, http.MethodPost, handlers)
 }
 
-func (r *Router) SetErrorHandler(fn ErrorHandle) {
-	r.errorHandler = fn
+// PUT registers the given handlers at the path for a PUT request
+func (r *Router) PUT(path string, handlers ...RequestHandler) {
+	r.combineAndWrapHandlers(path, http.MethodPut, handlers)
 }
 
-// DisableDebug disables the debug outputs that might be too much for some people
-func (r *Router) DisableDebug() {
-	r.DebugLog.SetOutput(ioutil.Discard)
-	r.DebugLog.SetFlags(0)
-}
-
-// EnableDebug enables the debug outputs
-func (r *Router) EnableDebug() {
-	r.DebugLog.SetOutput(os.Stdout)
-	r.DebugLog.SetFlags(log.LstdFlags)
-}
-
-// GetHandler returns the http.Handler so that it can be used in HTTP servers
-func (r *Router) GetHandler() http.Handler {
-	return r.router
-}
-
-// ListenAndServe starts a web server at given addr
-func (r *Router) ListenAndServe(addr string) error {
-	r.InfoLog.Println("Listening HTTP on " + addr)
-	return http.ListenAndServe(addr, r.router)
-}
-
-// subpath initiates a new route with path and handlers, useful for grouping
-func (r *Router) subpath(_path string, handlers []interface{}) (string, []interface{}) {
-	combinedHandlers := r.handlers
-	combinedHandlers = append(combinedHandlers, handlers...)
-
-	resultingPath := path.Join(r.prefix, _path)
-	return resultingPath, combinedHandlers
-}
-
-func (r *Router) combineAndWrapHandlers(path, method string, handlers ...interface{}) {
-	resultingPath, combinedHandlers := r.subpath(path, handlers)
-	fn := r.wrapHandlers(r.injector, resultingPath, combinedHandlers...)
-	r.printBindingMessage(resultingPath, method, combinedHandlers...)
-
-	if method == "GET" {
-		r.router.GET(resultingPath, fn)
-	} else if method == "POST" {
-		r.router.POST(resultingPath, fn)
-	}
-}
-
-// GET registers given set of handlers to a GET request at path
-func (r *Router) GET(_path string, handlers ...interface{}) {
-	r.combineAndWrapHandlers(_path, http.MethodGet, handlers...)
-}
-
-// POST registers given set of handlers to a POST request at path
-func (r *Router) POST(_path string, handlers ...interface{}) {
-	r.combineAndWrapHandlers(_path, http.MethodPost, handlers...)
+// HEAD registers the given handlers at the path for a HEAD request
+func (r *Router) HEAD(path string, handlers ...RequestHandler) {
+	r.combineAndWrapHandlers(path, http.MethodHead, handlers)
 }
 
 // Group groups a given path with additional interfaces. It is useful to avoid
 // repetitions while defining many paths
-func (r *Router) Group(_path string, handlers ...interface{}) *Router {
+func (r *Router) Group(_path string, handlers ...RequestHandler) *Router {
 	newRouter := &Router{
-		router:       r.router,
-		injector:     r.injector,
-		prefix:       path.Join(r.prefix, _path),
-		InfoLog:      r.InfoLog,
-		DebugLog:     r.DebugLog,
-		errorHandler: r.errorHandler,
+		engine: r.engine,
+		prefix: path.Join(r.prefix, _path),
 	}
 
 	// Copy previous handlers references
-	newRouter.handlers = make([]interface{}, len(r.handlers))
+	newRouter.handlers = make([]RequestHandler, len(r.handlers))
 	copy(newRouter.handlers, r.handlers)
 
 	// Append new handlers
@@ -162,91 +68,106 @@ func (r *Router) Group(_path string, handlers ...interface{}) *Router {
 	return newRouter
 }
 
-// Provide tells the injector to use the given value
-func (r *Router) Provide(value interface{}) {
-	r.injector.Provide(value)
+// subpath initiates a new route with path and handlers, useful for grouping
+func (r *Router) subpath(_path string, handlers []RequestHandler) (string, []RequestHandler) {
+	combinedHandlers := r.handlers
+	combinedHandlers = append(combinedHandlers, handlers...)
+
+	resultingPath := path.Join(r.prefix, _path)
+	return resultingPath, combinedHandlers
 }
 
-// ProvideCustom tells the injector to use the given value type with given
-// CustomProvideFunction
-func (r *Router) ProvideCustom(value interface{}, fn CustomProvideFunction) {
-	r.injector.ProvideCustom(value, fn)
-}
+func (r *Router) combineAndWrapHandlers(path, method string, handlers []RequestHandler) {
+	resultingPath, combinedHandlers := r.subpath(path, handlers)
 
-// Static serves static files from a given base, without any prefix
-func (r *Router) Static(prefix, base string) {
-	r.router.ServeFiles(path.Join(prefix, "*filepath"), http.Dir(base))
-}
+	fn := r.transformRequestHandlers(resultingPath, method, combinedHandlers)
 
-// Prints the binding message for a route
-func (r *Router) printBindingMessage(path, method string, handlers ...interface{}) {
-	for _, handler := range handlers {
-		r.InfoLog.Printf("%-5s %-40s %-20s\n", method, path, reflect.TypeOf(handler))
+	switch method {
+	case http.MethodGet:
+		r.engine.actualRouter.GET(resultingPath, fn)
+	case http.MethodPost:
+		r.engine.actualRouter.POST(resultingPath, fn)
+	case http.MethodPut:
+		r.engine.actualRouter.PUT(resultingPath, fn)
+	case http.MethodHead:
+		r.engine.actualRouter.HEAD(resultingPath, fn)
 	}
 }
 
-func (r *Router) wrapHandlers(injector *Injector, path string, fns ...interface{}) httprouter.Handle {
-	// Determine parameter types
-	hcs := make([]*handlerContext, len(fns))
-	for idx, fn := range fns {
-		hcs[idx] = convertHandler(injector, fn)
+func (r *Router) transformRequestHandlers(path string, method string, handlers []RequestHandler) httprouter.Handle {
+	middleHandlers := make([]*handlerContext, len(handlers))
+
+	for i, handler := range handlers {
+		mh, err := transformRequestHandler(path, method, r.engine.injector, handler)
+		if err != nil {
+			log.Fatal(err)
+		}
+		middleHandlers[i] = mh
 	}
 
-	fn := func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-		startTime := time.Now()
+	fn := func(wr http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+		st := time.Now()
+		routeStat := RouteStat{
+			Request:     req,
+			MatchedPath: path,
+			Handlers:    make([]HandlerStat, len(middleHandlers)),
+		}
 
-		// Create a context that will be used among multiple headers
-		c := ContextFromRequest(w, req, r.InfoLog)
+		// Create a logger for each request so that we can group the output
+		buf := new(bytes.Buffer)
+		logger := log.New(buf, "", log.LstdFlags)
 
-		// TODO: Eliminate this with using custom error handler of httprouter
-		/*
-			defer func() {
-				rec := recover()
-				if rec != nil {
-					var err error
-					switch t := rec.(type) {
-					case string:
-						err = errors.New(t)
-					case error:
-						err = t
-					default:
-						err = errors.New("Unknown error")
-					}
+		// Create a context that wraps the request, writer and logger
+		ctx := contextFromRequest(path, wr, req, ps, logger)
 
-					r.InfoLog.Println("A panic occured while serving request: " + err.Error())
-					r.ErrorHandler(err, c)
-				}
-			}()
-		*/
-
-		for _, hc := range hcs {
-			handlerStartTime := time.Now()
-			res, err := hc.execute(injector, c, ps)
-
-			if err != nil {
-				r.errorHandler(err, c)
-				break // Stopping the chain
+		// For each of the handler this route has, try to execute it
+		for idx, handler := range middleHandlers {
+			hc := HandlerStat{
+				FuncName: handler.name,
 			}
 
-			// We stop chain if it is required
-			if c.stopChain {
+			// Parse the parameters to the handler object
+			stHandler := time.Now()
+			fn := handler.RequestHandler
+			err := fn(ctx)
+
+			hc.Duration = time.Since(stHandler)
+
+			// If an error occurs, stop the chain
+			if err != nil {
+				ctx.StopChain()
+				r.engine.errorHandler(err, ctx)
+
+				// Put the route stats
+				hc.Error = err
+				hc.StopChain = true
+				routeStat.Handlers[idx] = hc
+
 				break
 			}
 
-			// If error is nil, and user is returning error, its his problem
-			if hc.outResponse != nil {
-				if res != nil {
-					c.SetBody(res)
-				}
-				// TODO: Else what?
+			// Voluntarily stopped
+			if ctx.stopChain {
+				// Put the route stats
+				hc.Duration = time.Since(st)
+				hc.StopChain = true
+				routeStat.Handlers[idx] = hc
+
+				break
 			}
 
-			r.DebugLog.Printf("%-5s %-30s %-30s %10s\n", req.Method, req.URL.Path, hc.fn.String(), time.Since(handlerStartTime).String())
+			routeStat.Handlers[idx] = hc
 		}
 
-		// Finally write the request to client
-		bytes := c.Finalize()
-		r.InfoLog.Printf("%-5s %-30s %-30s %10s %4d %d\n", req.Method, req.URL.Path, path, time.Since(startTime).String(), c.status, bytes)
+		// Save final stats
+		routeStat.ResponseSize = ctx.Finalize()
+		routeStat.ResponseCode = ctx.status
+		routeStat.TotalDuration = time.Since(st)
+		routeStat.Logs = buf
+
+		if r.engine.callback != nil {
+			r.engine.callback(routeStat)
+		}
 	}
 
 	return fn
