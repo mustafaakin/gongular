@@ -50,6 +50,36 @@ func (r *Router) HEAD(path string, handlers ...RequestHandler) {
 	r.combineAndWrapHandlers(path, http.MethodHead, handlers)
 }
 
+// DELETE registers the given handlers at the path for a DELETE request
+func (r *Router) DELETE(path string, handlers ...RequestHandler) {
+	r.combineAndWrapHandlers(path, http.MethodDelete, handlers)
+}
+
+// PATCH registers the given handlers at the path for a PATCH request
+func (r *Router) PATCH(path string, handlers ...RequestHandler) {
+	r.combineAndWrapHandlers(path, http.MethodPatch, handlers)
+}
+
+// OPTIONS registers the given handlers at the path for a OPTIONS request
+func (r *Router) OPTIONS(path string, handlers ...RequestHandler) {
+	r.combineAndWrapHandlers(path, http.MethodOptions, handlers)
+}
+
+// TRACE registers the given handlers at the path for a TRACE request
+func (r *Router) TRACE(path string, handlers ...RequestHandler) {
+	r.combineAndWrapHandlers(path, http.MethodTrace, handlers)
+}
+
+// CONNECT registers the given handlers at the path for a CONNECT request
+func (r *Router) CONNECT(path string, handlers ...RequestHandler) {
+	r.combineAndWrapHandlers(path, http.MethodConnect, handlers)
+}
+
+// Method registers the given handlers at the path for the given method request
+func (r *Router) Method(method, path string, handlers ...RequestHandler) {
+	r.combineAndWrapHandlers(path, method, handlers)
+}
+
 // Group groups a given path with additional interfaces. It is useful to avoid
 // repetitions while defining many paths
 func (r *Router) Group(_path string, handlers ...RequestHandler) *Router {
@@ -79,19 +109,8 @@ func (r *Router) subpath(_path string, handlers []RequestHandler) (string, []Req
 
 func (r *Router) combineAndWrapHandlers(path, method string, handlers []RequestHandler) {
 	resultingPath, combinedHandlers := r.subpath(path, handlers)
-
 	fn := r.transformRequestHandlers(resultingPath, method, combinedHandlers)
-
-	switch method {
-	case http.MethodGet:
-		r.engine.actualRouter.GET(resultingPath, fn)
-	case http.MethodPost:
-		r.engine.actualRouter.POST(resultingPath, fn)
-	case http.MethodPut:
-		r.engine.actualRouter.PUT(resultingPath, fn)
-	case http.MethodHead:
-		r.engine.actualRouter.HEAD(resultingPath, fn)
-	}
+	r.engine.actualRouter.Handle(method, resultingPath, fn)
 }
 
 func (r *Router) transformRequestHandlers(path string, method string, handlers []RequestHandler) httprouter.Handle {
