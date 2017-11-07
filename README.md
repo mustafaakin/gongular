@@ -84,12 +84,12 @@ func(p *PathParamHandler) Handle(c *Context) error {
 
 ## Query Parameters
 
-Query parameter is very similar to path parameters, the only difference the field name should be `Query` and it should also be a flat struct with no inner parameters or arrays.
+Query parameter is very similar to path parameters, the only difference the field name should be `Query` and it should also be a flat struct with no inner parameters or arrays. Query params are case sensitive and use the exact name of the struct property by default. You can use the `q` struct tag to specify the parameter key'
 
 ```go
 type QueryParamHandler struct {
     Query struct {
-        Username string
+        Username string `q:"username"`
         Age int
     }
 }

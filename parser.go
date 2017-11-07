@@ -40,6 +40,8 @@ const (
 const (
 	// TagInject The field name that is used to lookup injections in the handlers
 	TagInject = "inject"
+	// TagQuery is the field tag to define a query parameter's key
+	TagQuery = "q"
 )
 
 func parseInt(kind reflect.Kind, s string, place string, field reflect.StructField, val *reflect.Value) error {
@@ -201,7 +203,14 @@ func (c *Context) parseQuery(obj reflect.Value) error {
 	for i := 0; i < numFields; i++ {
 		field := queryType.Field(i)
 
-		s := queryValues.Get(field.Name)
+		var s string
+		tag, ok := field.Tag.Lookup(TagQuery)
+		if ok {
+			s = queryValues.Get(tag)
+		} else {
+			s = queryValues.Get(field.Name)
+		}
+
 		if s == "" {
 			// Do not fail right now, it is the job of validator
 			continue
