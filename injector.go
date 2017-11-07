@@ -1,12 +1,14 @@
 package gongular
 
 import (
+	"fmt"
 	"reflect"
 )
 
 // injector remembers the provided values so that you can inject whenever
 // you need them
 type injector struct {
+	unsafeValues    map[string]reflect.Value
 	values          map[reflect.Type]map[string]interface{}
 	customProviders map[reflect.Type]map[string]CustomProvideFunction
 }
@@ -14,6 +16,7 @@ type injector struct {
 // newInjector creates an Injector with its initial structures initialized
 func newInjector() *injector {
 	return &injector{
+		unsafeValues:    make(map[string]reflect.Value),
 		values:          make(map[reflect.Type]map[string]interface{}),
 		customProviders: make(map[reflect.Type]map[string]CustomProvideFunction),
 	}
@@ -26,6 +29,15 @@ func (inj *injector) Provide(value interface{}, key string) {
 		inj.values[tip] = make(map[string]interface{})
 	}
 	inj.values[tip][key] = value
+}
+
+// ProvideUnsafe registers given value depending on its name
+func (inj *injector) ProvideUnsafe(key string, value interface{}) {
+	if _, ok := inj.unsafeValues[key]; ok {
+		panic(fmt.Sprintf("already provided %#v unsafe value for key %q. ", value, key))
+	}
+
+	inj.unsafeValues[key] = reflect.ValueOf(value)
 }
 
 // ProvideCustom gets the type information from value, however calls CustomProvideFunction
@@ -49,6 +61,11 @@ func (inj *injector) GetDirectValue(tip reflect.Type, key string) (interface{}, 
 // GetCustomValue returns the CustomProvideFunction for the requested dependency
 func (inj *injector) GetCustomValue(tip reflect.Type, key string) (CustomProvideFunction, bool) {
 	val, ok := inj.customProviders[tip][key]
+	return val, ok
+}
+
+func (inj *injector) GetUnsafeValue(key string) (reflect.Value, bool) {
+	val, ok := inj.unsafeValues[key]
 	return val, ok
 }
 

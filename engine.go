@@ -84,6 +84,11 @@ func (e *Engine) Provide(value interface{}) {
 	e.injector.Provide(value, "default")
 }
 
+// ProvideUnsafe provides a key with an exact value
+func (e *Engine) ProvideUnsafe(key string, value interface{}) {
+	e.injector.ProvideUnsafe(key, value)
+}
+
 // ProvideWithKey provides an interface with a key
 func (e *Engine) ProvideWithKey(key string, value interface{}) {
 	e.injector.Provide(value, key)

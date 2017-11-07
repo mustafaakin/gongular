@@ -314,6 +314,49 @@ e.CustomProvide(&sql.DB{}, func(c *Context) (interface{}, error) {
 e.GetRouter().GET("/", &injectCustom{})
 ```
 
+### Unsafe Injection
+
+The default `Provide` functions allow you to inject implementations only. Injection of interfaces will not work. During injection, the injector will search for a provided type and fail. For example the following code will not work:
+
+```go
+type injectKey struct {
+	DB MySQLInterface `inject:"db"`
+}
+
+func (i *injectKey) Handle(c *Context) error {
+	c.SetBody("yay")
+	return nil
+}
+
+e.ProvideWithKey("db", &sql.DB{})
+
+e.GetRouter().GET("/", &injectKey{})
+```
+
+This will cause an injector error. If you want to inject interfaces you must use `ProvideUnsafe`. `ProvideUnsafe` is a strict key/value injection. You cannot provide multiple values for the same key.
+
+Example usage:
+
+
+```go
+type injectKey struct {
+	DB MySQLInterface `inject:"db"`
+}
+
+func (i *injectKey) Handle(c *Context) error {
+	c.SetBody("yay")
+	return nil
+}
+
+e.ProvideUnsafe("db", initializeDB())
+
+// This would cause a panic
+// e.ProvideUnsafe("db", &sql.DB{})
+
+e.GetRouter().GET("/", &injectKey{})
+```
+
+
 ## gongular.Context struct
 
 * `context.SetBody(interface{})` : Sets the response body to be serialized.  

@@ -2,6 +2,7 @@ package gongular
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"reflect"
@@ -42,6 +43,10 @@ const (
 	TagInject = "inject"
 	// TagQuery is the field tag to define a query parameter's key
 	TagQuery = "q"
+)
+
+var (
+	errUnassignable = errors.New("value is not assignable to this type")
 )
 
 func parseInt(kind reflect.Kind, s string, place string, field reflect.StructField, val *reflect.Value) error {
@@ -308,8 +313,19 @@ func (c *Context) setInjectionForField(tip reflect.Type, key string, injector *i
 	cachedVal, cachedOk := c.getCachedInjection(tip, key)
 	val, directOk := injector.GetDirectValue(tip, key)
 	fn, customOk := injector.GetCustomValue(tip, key)
+	uval, uvalOK := injector.GetUnsafeValue(key)
 
-	if cachedOk {
+	if uvalOK {
+		if !uval.Type().AssignableTo(tip) {
+			return InjectionError{
+				Key:             key,
+				Tip:             tip,
+				UnderlyingError: errUnassignable,
+			}
+		}
+		fieldObj.Set(uval)
+		return nil
+	} else if cachedOk {
 		fieldObj.Set(reflect.ValueOf(cachedVal))
 		return nil
 	} else if directOk {
