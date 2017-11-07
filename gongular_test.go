@@ -43,14 +43,50 @@ func TestSimplePutHandler(t *testing.T) {
 	assert.Equal(t, "\"selam\"", content)
 }
 
-func TestSimpleHeadHandler(t *testing.T) {
+func TestSimpleHttpMethodsHandler(t *testing.T) {
 	e := newEngineTest()
-	e.GetRouter().HEAD("/", &simpleHandler{})
 
-	resp, content := respWrap(t, e, "/", http.MethodHead, nil)
+	fns := map[string]func(string, ...RequestHandler){
+		http.MethodHead:    e.GetRouter().HEAD,
+		http.MethodConnect: e.GetRouter().CONNECT,
+		http.MethodDelete:  e.GetRouter().DELETE,
+		http.MethodOptions: e.GetRouter().OPTIONS,
+		http.MethodPatch:   e.GetRouter().PATCH,
+		http.MethodTrace:   e.GetRouter().TRACE,
+		http.MethodPut:     e.GetRouter().PUT,
+	}
 
-	assert.Equal(t, http.StatusOK, resp.Code)
-	assert.Equal(t, "\"selam\"", content)
+	for method, fn := range fns {
+		path := "/" + method
+		fn(path, &simpleHandler{})
+		resp, content := respWrap(t, e, path, method, nil)
+
+		assert.Equal(t, http.StatusOK, resp.Code)
+		assert.Equal(t, "\"selam\"", content)
+	}
+}
+
+func TestSimpleHttpMethodsAlternativeHandler(t *testing.T) {
+	fns := []string{
+		http.MethodHead,
+		http.MethodConnect,
+		http.MethodDelete,
+		http.MethodOptions,
+		http.MethodPatch,
+		http.MethodTrace,
+		http.MethodPut,
+	}
+
+	for _, method := range fns {
+		e := newEngineTest()
+
+		path := "/" + method
+		e.GetRouter().Method(method, path, &simpleHandler{})
+		resp, content := respWrap(t, e, path, method, nil)
+
+		assert.Equal(t, http.StatusOK, resp.Code)
+		assert.Equal(t, "\"selam\"", content)
+	}
 }
 
 type statusSetHandler struct{}

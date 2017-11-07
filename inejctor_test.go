@@ -129,3 +129,46 @@ func TestInjectCustomCache(t *testing.T) {
 
 	assert.Equal(t, 2, callCount)
 }
+
+type dummyInterface interface {
+	getId() int
+}
+
+type dummyInterfaceImpl struct {
+	id int
+}
+
+func (d dummyInterfaceImpl) getId() int {
+	return d.id * 5
+}
+
+type injectionInterfaceHandler struct {
+	Param struct {
+		UserID uint
+	}
+	Dummy dummyInterface `inject:"key1"`
+}
+
+func getDummyInterface() dummyInterface {
+	return dummyInterfaceImpl{
+		id: 5,
+	}
+}
+
+func (i *injectionInterfaceHandler) Handle(c *Context) error {
+	c.SetBody(fmt.Sprintf("%d:%d", i.Dummy.getId(), i.Param.UserID))
+	return nil
+}
+
+func TestInjectInterface(t *testing.T) {
+	e := newEngineTest()
+	e.errorHandler = defaultErrorHandler
+	e.ProvideUnsafe("key1", getDummyInterface())
+
+	e.GetRouter().GET("/my/interface/interaction/:UserID", &injectionInterfaceHandler{})
+
+	resp, content := get(t, e, "/my/interface/interaction/5")
+
+	assert.Equal(t, http.StatusOK, resp.Code)
+	assert.Equal(t, `"25:5"`, content)
+}

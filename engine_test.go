@@ -5,6 +5,9 @@ import (
 	"net/http"
 	"testing"
 
+	"bytes"
+	"io/ioutil"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -66,11 +69,43 @@ func TestGroup(t *testing.T) {
 	assert.Equal(t, http.StatusTeapot, resp4.Code)
 }
 
-func TestEngine_WithDefaultRouteCallback(t *testing.T) {
+func TestEngineWithDefaultRouteCallback(t *testing.T) {
 	e := NewEngine()
 	e.GetRouter().GET("/", &simpleHandler{})
 
 	resp, content := get(t, e, "/")
 	assert.Equal(t, http.StatusOK, resp.Code)
 	assert.Equal(t, `"selam"`, content)
+}
+
+func TestEngineFileServe(t *testing.T) {
+	e := NewEngine()
+	e.ServeFile("/", "README.md")
+	e.ServeFiles("/static", http.Dir("."))
+
+	bytesReadme, err := ioutil.ReadFile("README.md")
+	if err != nil {
+		assert.NoError(t, err, "cannot read file")
+	}
+
+	// Test binary files as well
+	bytesLogo, err := ioutil.ReadFile("logo.png")
+	if err != nil {
+		assert.NoError(t, err, "cannot read file")
+	}
+
+	resp, content := get(t, e, "/")
+	assert.Equal(t, http.StatusOK, resp.Code)
+	assert.Equal(t, string(bytesReadme), content)
+
+	resp2, content2 := get(t, e, "/static/logo.png")
+	assert.Equal(t, http.StatusOK, resp2.Code)
+
+	// Sorry for the inefficiency
+	assert.Equal(t, 0, bytes.Compare([]byte(content2), bytesLogo))
+
+	// Not found test
+	resp3, _ := get(t, e, "/static/no-file-should-be-here")
+	assert.Equal(t, http.StatusNotFound, resp3.Code)
+
 }
