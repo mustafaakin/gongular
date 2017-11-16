@@ -79,6 +79,11 @@ func (e *Engine) ListenAndServe(addr string) error {
 	return http.ListenAndServe(addr, e.actualRouter)
 }
 
+// ListenAndServeTLS serves the given engine with a specific address on HTTPs.
+func (e *Engine) ListenAndServeTLS(addr, certFile, keyFile string) error {
+	return http.ListenAndServeTLS(addr, certFile, keyFile, e.actualRouter)
+}
+
 // Provide provides with "default" key
 func (e *Engine) Provide(value interface{}) {
 	e.injector.Provide(value, "default")
